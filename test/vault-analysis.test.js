@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -13,7 +13,7 @@ import {
 import { saveNoteToVault } from '../src/vault.js';
 import { validateLatexDelimiters } from '../src/markdown.js';
 
-test('analisi del vault: riconosce materie, indici e mappe concettuali', () => {
+test('analisi del vault: riconosce materie e genera gli indici', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'uniai-vault-analysis-'));
   const subjectDir = path.join(root, 'uni', 'Uni', 'triennale', 'analisi matematica');
   mkdirSync(subjectDir, { recursive: true });
@@ -35,17 +35,8 @@ test('analisi del vault: riconosce materie, indici e mappe concettuali', () => {
     assert.equal(rebuilt.results.length, 1);
     const index = readFileSync(path.join(subjectDir, '_Indice.md'), 'utf8');
     assert.match(index, /\[\[uni\/Uni\/triennale\/analisi matematica\/00 limiti\|Limiti\]\]/);
-    assert.match(index, /_Mappa concettuale\.canvas/);
-
-    const map = readFileSync(path.join(subjectDir, '_Mappa concettuale.md'), 'utf8');
-    assert.match(map, /```mermaid/);
-    assert.match(map, /flowchart TD/);
-    assert.match(map, /Mappa concettuale semplificata/);
-
-    const canvas = JSON.parse(readFileSync(path.join(subjectDir, '_Mappa concettuale.canvas'), 'utf8'));
-    assert.ok(canvas.nodes.length >= 3);
-    assert.ok(canvas.edges.length >= 2);
-    assert.ok(canvas.nodes.some((node) => node.type === 'text'));
+    assert.equal(existsSync(path.join(subjectDir, '_Mappa concettuale.md')), false);
+    assert.equal(existsSync(path.join(subjectDir, '_Mappa concettuale.canvas')), false);
 
     writeFileSync(path.join(subjectDir, '02 integrali.md'), '# Integrali\n\n## Definizione\n\nArea sotto una curva.\n');
     const updated = rebuildArtifactsForFile(root, path.join(subjectDir, '02 integrali.md'), {
@@ -67,7 +58,7 @@ test('analisi del vault: riconosce materie, indici e mappe concettuali', () => {
     });
     assert.match(saved.relativePath, /analisi matematica/);
     assert.ok(readFileSync(path.join(subjectDir, '_Indice.md'), 'utf8').includes('Serie numeriche'));
-    assert.ok(readFileSync(path.join(subjectDir, '_Mappa concettuale.canvas'), 'utf8').includes('Serie numeriche'));
+    assert.equal(existsSync(path.join(subjectDir, '_Mappa concettuale.canvas')), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

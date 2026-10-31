@@ -1,5 +1,4 @@
 import path from 'node:path';
-import crypto from 'node:crypto';
 import {
   existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync
 } from 'node:fs';
@@ -7,9 +6,7 @@ import { normalizeTitle, sanitizeFilename, slugify, uniqueStrings } from './util
 import { validateLatexDelimiters } from './markdown.js';
 
 export const GENERATED_INDEX = '_Indice.md';
-export const GENERATED_MAP = '_Mappa concettuale.md';
-export const GENERATED_CANVAS = '_Mappa concettuale.canvas';
-const GENERATED_FILES = new Set([GENERATED_INDEX, GENERATED_MAP, GENERATED_CANVAS]);
+const GENERATED_FILES = new Set([GENERATED_INDEX]);
 const IGNORED_DIRS = new Set(['.obsidian', '.trash', '.git', 'node_modules', '.smart-env']);
 const SYSTEM_ROOTS = new Set(['triennale', 'magistrale']);
 
@@ -149,16 +146,6 @@ function noteMetadata(absolutePath, vaultPath) {
     .map((match) => match[1].trim())
     .filter(Boolean);
   const stat = statSync(absolutePath);
-  const bodyText = content
-    .replace(/^---\n[\s\S]*?\n---\n?/, '')
-    .replace(/!\[\[[^\]]+\]\]/g, ' ')
-    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, '$2$1')
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/[#*_`>$]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 6000);
   return {
     title: frontmatter.title || h1 || basename,
     basename,
@@ -169,7 +156,6 @@ function noteMetadata(absolutePath, vaultPath) {
     headings,
     links: uniqueStrings(links),
     summary: plainSummary(content),
-    bodyText,
     size: stat.size,
     mtime: stat.mtime.toISOString()
   };
@@ -378,8 +364,6 @@ ${tags.map((tag) => `  - "${tag}"`).join('\n')}
 
 > [!info] Indice generato automaticamente
 > ${subject.noteCount} note · ${subject.stats.links} wikilink · ${analysis.subjects.length} materie nel vault.
-> Mappa visuale: [[${path.posix.join(subject.relativePath, GENERATED_CANVAS)}|Mappa concettuale Canvas]]
-> Mappa Mermaid: [[${path.posix.join(subject.relativePath, GENERATED_MAP.replace(/\.md$/i, ''))}|Mappa concettuale Mermaid]]
 
 ## Note per cartella
 
@@ -398,338 +382,14 @@ ${indexRowsForNotes(subject)}
 `;
 }
 
-function mermaidSafe(value) {
-  return String(value || '')
-    .replace(/["\r\n]/g, ' ')
-    .replace(/\[/g, '(')
-    .replace(/\]/g, ')')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 90);
-}
-
-const CONCEPT_STOPWORDS = new Set([
-  'della', 'delle', 'degli', 'dello', 'delli', 'delle', 'dalla', 'dalle', 'dagli', 'dallo',
-  'nel', 'nella', 'nelle', 'negli', 'nello', 'sul', 'sulla', 'sulle', 'sugli', 'sullo',
-  'con', 'come', 'per', 'tra', 'fra', 'una', 'uno', 'dei', 'delle', 'sono', 'essere',
-  'questo', 'questa', 'questi', 'queste', 'quello', 'quella', 'quelli', 'quelle',
-  'anche', 'solo', 'ogni', 'tutti', 'tutte', 'altro', 'altra', 'altri', 'altre',
-  'quando', 'dove', 'perche', 'quindi', 'allora', 'dopo', 'prima', 'durante',
-  'definizione', 'definizioni', 'esempio', 'esempi', 'formula', 'formule',
-  'caratteristica', 'caratteristiche', 'introduzione', 'riassunto', 'nota', 'note',
-  'parte', 'caso', 'casi', 'generale', 'principale', 'principali', 'metodo', 'metodi',
-  'analisi', 'studio', 'considerazioni', 'osservazioni', 'premessa', 'conclusione',
-  'conclusioni', 'esercizio', 'esercizi', 'soluzione', 'soluzioni', 'problema', 'problemi',
-  'capitolo', 'sezione', 'significato', 'proprieta', 'proprietà', 'grandezza', 'grandezze'
-]);
-
-function stemConceptToken(raw) {
-  let token = String(raw || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z]/g, '');
-  if (token.length < 4) return '';
-  if (CONCEPT_STOPWORDS.has(token)) return '';
-  if (token.length > 4) token = token.replace(/[aeiou]$/, '');
-  return token;
-}
-
-function conceptTokens(text) {
-  const words = String(text || '').match(/[A-Za-zÀ-ÿ]{4,}/g) || [];
-  return words.map(stemConceptToken).filter(Boolean);
-}
-
-function cleanConceptLabel(value) {
-  return String(value || '')
-    .replace(/^\d{2,4}\s+/, '')
-    .replace(/\.md$/i, '')
-    .replace(/\s+/g, ' ')
-    .replace(/^[-–—:\s]+|[-–—:\s]+$/g, '')
-    .trim();
-}
-
-function shortConceptLabel(value, maxLength = 72) {
-  const label = cleanConceptLabel(value);
-  if (label.length <= maxLength) return label;
-  return `${label.slice(0, maxLength - 1).trim()}…`;
-}
-
-function buildConceptVectors(subject) {
-  const noteDocs = subject.notes.map((note) => {
-    const titleTokens = conceptTokens(cleanConceptLabel(note.basename));
-    const headingTokens = conceptTokens(note.headings.join(' '));
-    const bodyTokens = conceptTokens(note.bodyText || note.summary || '');
-    const frequencies = new Map();
-    const add = (token, weight) => frequencies.set(token, (frequencies.get(token) || 0) + weight);
-    for (const token of titleTokens) add(token, 3);
-    for (const token of headingTokens) add(token, 2);
-    for (const token of bodyTokens) add(token, 1);
-    return { note, frequencies };
-  });
-
-  const documentFrequency = new Map();
-  for (const doc of noteDocs) {
-    for (const token of doc.frequencies.keys()) {
-      documentFrequency.set(token, (documentFrequency.get(token) || 0) + 1);
-    }
-  }
-
-  const totalDocs = noteDocs.length;
-  return noteDocs.map((doc) => {
-    const vector = new Map();
-    let normSquared = 0;
-    for (const [token, frequency] of doc.frequencies) {
-      const idf = Math.log((totalDocs + 1) / ((documentFrequency.get(token) || 0) + 1)) + 1;
-      const weight = frequency * idf;
-      if (weight <= 0) continue;
-      vector.set(token, weight);
-      normSquared += weight * weight;
-    }
-    return { note: doc.note, vector, norm: Math.sqrt(normSquared) || 1 };
-  });
-}
-
-function cosineSimilarity(left, right) {
-  let dot = 0;
-  const [small, large] = left.vector.size <= right.vector.size
-    ? [left.vector, right.vector]
-    : [right.vector, left.vector];
-  for (const [token, weight] of small) {
-    const other = large.get(token);
-    if (other) dot += weight * other;
-  }
-  return dot / (left.norm * right.norm);
-}
-
-function averageVector(vectors) {
-  const average = new Map();
-  for (const item of vectors) {
-    for (const [token, weight] of item.vector) {
-      average.set(token, (average.get(token) || 0) + weight / vectors.length);
-    }
-  }
-  let normSquared = 0;
-  for (const weight of average.values()) normSquared += weight * weight;
-  return { vector: average, norm: Math.sqrt(normSquared) || 1 };
-}
-
-function clusterNotes(subject) {
-  const docs = buildConceptVectors(subject).filter((doc) => doc.vector.size > 0);
-  if (docs.length <= 2) return docs.length ? [docs] : [];
-  const k = Math.max(3, Math.min(8, Math.round(Math.sqrt(docs.length) / 1.6)));
-  const clusterCount = Math.min(k, docs.length);
-
-  const centrality = docs.map((doc) => docs.reduce((total, other) => total + cosineSimilarity(doc, other), 0));
-  const centroids = [];
-  const firstIndex = centrality.indexOf(Math.max(...centrality));
-  centroids.push(docs[firstIndex]);
-  while (centroids.length < clusterCount) {
-    let bestIndex = -1;
-    let bestDistance = -1;
-    docs.forEach((doc, index) => {
-      if (centroids.includes(doc)) return;
-      const maxSimilarity = Math.max(...centroids.map((centroid) => cosineSimilarity(doc, centroid)));
-      const distance = 1 - maxSimilarity;
-      if (distance > bestDistance) {
-        bestDistance = distance;
-        bestIndex = index;
-      }
-    });
-    if (bestIndex === -1) break;
-    centroids.push(docs[bestIndex]);
-  }
-
-  let assignments = new Array(docs.length).fill(-1);
-  let currentCentroids = centroids.map((doc) => ({ vector: doc.vector, norm: doc.norm }));
-  for (let iteration = 0; iteration < 30; iteration += 1) {
-    const nextAssignments = docs.map((doc) => {
-      let bestCluster = 0;
-      let bestScore = -1;
-      currentCentroids.forEach((centroid, index) => {
-        const score = cosineSimilarity(doc, centroid);
-        if (score > bestScore) {
-          bestScore = score;
-          bestCluster = index;
-        }
-      });
-      return bestCluster;
-    });
-
-    const groups = Array.from({ length: currentCentroids.length }, () => []);
-    nextAssignments.forEach((clusterIndex, docIndex) => groups[clusterIndex].push(docs[docIndex]));
-    const nextCentroids = groups.map((group, index) => group.length ? averageVector(group) : currentCentroids[index]);
-    const changed = nextAssignments.some((value, index) => value !== assignments[index]);
-    assignments = nextAssignments;
-    currentCentroids = nextCentroids;
-    if (!changed) break;
-  }
-
-  const groups = Array.from({ length: currentCentroids.length }, () => []);
-  assignments.forEach((clusterIndex, docIndex) => groups[clusterIndex].push(docs[docIndex]));
-  return groups.filter((group) => group.length > 0);
-}
-
-function titlePriority(label) {
-  const clean = cleanConceptLabel(label);
-  if (!clean) return -1000;
-  let score = 0;
-  if (clean.length >= 8 && clean.length <= 65) score += 10;
-  if (/^soluzione esercizio/i.test(clean)) score -= 4;
-  if (/(definizione|esempio|riassunto|formula|indice|guida|chiarimenti)/i.test(clean)) score -= 8;
-  return score;
-}
-
-export function buildConceptClusters(subject) {
-  const groups = clusterNotes(subject);
-  const clusters = groups.map((group) => {
-    const centrality = group.map((item) => group.reduce((total, other) => total + cosineSimilarity(item, other), 0));
-    const sorted = group
-      .map((item, index) => ({ ...item, centrality: centrality[index] }))
-      .sort((a, b) => {
-        const priority = titlePriority(b.note.basename) - titlePriority(a.note.basename);
-        return priority || b.centrality - a.centrality || a.note.basename.localeCompare(b.note.basename, 'it');
-      });
-    const representative = sorted[0]?.note;
-    if (!representative) return null;
-    const members = sorted
-      .filter((item) => item.note.relativePath !== representative.relativePath)
-      .slice(0, 3)
-      .map((item) => item.note);
-    return {
-      label: shortConceptLabel(representative.basename),
-      representative,
-      members,
-      notes: [representative, ...members],
-      size: group.length,
-      centrality: sorted[0]?.centrality || 0
-    };
-  }).filter(Boolean);
-
-  return clusters
-    .sort((a, b) => b.size - a.size || b.centrality - a.centrality)
-    .slice(0, 8);
-}
-
-export function buildConceptMapMarkdown(subject, analysis) {
-  const clusters = buildConceptClusters(subject);
-  const lines = [
-    'flowchart TD',
-    `  ROOT["${mermaidSafe(subject.name)}"]`
-  ];
-  clusters.forEach((cluster, index) => {
-    const clusterId = `C${index}`;
-    lines.push(`  ROOT --> ${clusterId}["${mermaidSafe(cluster.label)}"]`);
-    cluster.members.forEach((note, memberIndex) => {
-      lines.push(`  ${clusterId} --> N${index}_${memberIndex}["${mermaidSafe(shortConceptLabel(note.basename, 55))}"]`);
-    });
-  });
-
-  const noteRows = clusters.flatMap((cluster) => cluster.notes.map((note) => {
-    const target = note.relativePath.replace(/\.md$/i, '').replace(/\|/g, '—');
-    return `- [[${target}|${note.basename.replace(/\|/g, '—')}]]`;
-  }));
-
-  return `---
-title: "Mappa concettuale — ${subject.name}"
-subject: "${subject.name.replaceAll('"', '\\"')}"
-type: "mappa-concettuale"
-generated_by: "UniAi"
-generated_at: "${new Date().toISOString()}"
-tags:
-  - mappa-concettuale
-  - "materia/${slugify(subject.name)}"
-  - uniai
----
-
-# ${subject.name} — Mappa concettuale semplificata
-
-> [!info] Come è stata generata
-> La mappa analizza titoli, heading e contenuti delle note, raggruppa i concetti per similarità semantica e mostra solo i principali nuclei della materia.
-> Non rappresenta tutti i wikilink e non sostituisce l'indice completo.
-
-\`\`\`mermaid
-${lines.join('\n')}
-\`\`\`
-
-## Note di riferimento
-
-${noteRows.join('\n')}
-
-## Collegamenti
-
-- Indice completo: [[${path.posix.join(subject.relativePath, GENERATED_INDEX.replace(/\.md$/i, ''))}|Indice delle note]]
-- Canvas interattivo: [[${path.posix.join(subject.relativePath, GENERATED_CANVAS)}|Apri il Canvas]]
-`;
-}
-
-export function buildCanvasJson(subject) {
-  const clusters = buildConceptClusters(subject);
-  const nodes = [];
-  const edges = [];
-  const rootId = 'concept-root';
-  nodes.push({
-    id: rootId,
-    type: 'text',
-    text: `# ${subject.name}\n\nMappa concettuale semplificata`,
-    x: 0,
-    y: 0,
-    width: 300,
-    height: 120,
-    color: '6'
-  });
-
-  clusters.forEach((cluster, clusterIndex) => {
-    const clusterId = `cluster-${clusterIndex}`;
-    const clusterY = clusterIndex * 240;
-    nodes.push({
-      id: clusterId,
-      type: 'text',
-      text: `## ${cluster.label}`,
-      x: 400,
-      y: clusterY,
-      width: 300,
-      height: 100,
-      color: '4'
-    });
-    edges.push({ id: `edge-root-${clusterIndex}`, fromNode: rootId, toNode: clusterId, toEnd: 'arrow' });
-
-    cluster.notes.forEach((note, noteIndex) => {
-      const noteId = `note-${crypto.createHash('sha1').update(note.relativePath).digest('hex').slice(0, 12)}`;
-      nodes.push({
-        id: noteId,
-        type: 'file',
-        file: note.relativePath,
-        x: 820,
-        y: clusterY + (noteIndex - (cluster.notes.length - 1) / 2) * 125,
-        width: 280,
-        height: 90,
-        color: noteIndex === 0 ? '2' : '1'
-      });
-      edges.push({
-        id: `edge-${clusterIndex}-${noteIndex}`,
-        fromNode: clusterId,
-        toNode: noteId,
-        toEnd: 'arrow'
-      });
-    });
-  });
-
-  return JSON.stringify({ nodes, edges }, null, 2);
-}
-
 export function rebuildSubjectArtifacts({ vaultPath, subject, analysis }) {
   const subjectDir = path.resolve(vaultPath, subject.relativePath);
   const indexPath = path.join(subjectDir, GENERATED_INDEX);
-  const mapPath = path.join(subjectDir, GENERATED_MAP);
-  const canvasPath = path.join(subjectDir, GENERATED_CANVAS);
   atomicWrite(indexPath, buildIndexMarkdown(subject, analysis));
-  atomicWrite(mapPath, buildConceptMapMarkdown(subject, analysis));
-  atomicWrite(canvasPath, buildCanvasJson(subject));
   return {
     subject: subject.name,
     directory: subject.relativePath,
-    files: [indexPath, mapPath, canvasPath]
+    files: [indexPath]
   };
 }
 

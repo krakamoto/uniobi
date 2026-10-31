@@ -354,7 +354,7 @@ https://tuo-dominio/webdav/
 
 Per una sincronizzazione continua in tempo reale è possibile usare Syncthing tra server e telefono come alternativa a WebDAV, ma richiede l'installazione di Syncthing su entrambi i dispositivi.
 
-## Indici e mappe concettuali per materia
+## Indici per materia
 
 UniAi analizza la struttura reale del vault e riconosce le materie dalle cartelle configurate in:
 
@@ -362,12 +362,10 @@ UniAi analizza la struttura reale del vault e riconosce le materie dalle cartell
 OBSIDIAN_SUBJECT_ROOTS=uni/Uni/triennale,uni/Uni/magistrale
 ```
 
-Per ogni materia genera automaticamente tre file nella cartella della materia:
+Per ogni materia genera automaticamente un indice nella cartella della materia:
 
 ```text
 _Indice.md
-_Mappa concettuale.md
-_Mappa concettuale.canvas
 ```
 
 ### `_Indice.md`
@@ -378,20 +376,11 @@ Contiene:
 - wikilink diretti a ogni nota;
 - riassunto iniziale di ogni nota;
 - numero di note, wikilink e heading;
-- tag ricorrenti;
-- collegamenti all'indice e alla mappa.
-
-### `_Mappa concettuale.md`
-
-Contiene una mappa Mermaid **semplificata** generata analizzando titoli, heading e contenuti delle note. Le note vengono raggruppate per similarità semantica in pochi nuclei concettuali; non è un grafo di tutti i wikilink.
-
-### `_Mappa concettuale.canvas`
-
-È un Canvas Obsidian nativo con il concetto centrale, le principali aree tematiche e alcune note rappresentative per ogni area. È volutamente sintetico; per l’elenco completo usa `_Indice.md`.
+- tag ricorrenti.
 
 ### Aggiornamento automatico
 
-Gli indici e le mappe vengono rigenerati automaticamente quando UniAi salva una nuova nota nella materia. È possibile rigenerarli manualmente:
+Gli indici vengono rigenerati automaticamente quando UniAi salva una nuova nota nella materia. È possibile rigenerarli manualmente:
 
 ```bash
 npm run vault:indexes
@@ -426,7 +415,7 @@ Il modello deve restituire anche:
 }
 ```
 
-La nota viene salvata nella cartella della materia corrispondente. Se la materia non esiste, UniAi crea automaticamente una cartella con il nome della materia sotto `OBSIDIAN_NEW_SUBJECT_ROOT` e genera subito indice e mappa concettuale.
+La nota viene salvata nella cartella della materia corrispondente. Se la materia non esiste, UniAi crea automaticamente una cartella con il nome della materia sotto `OBSIDIAN_NEW_SUBJECT_ROOT` e genera subito l’indice della materia.
 
 Esempio:
 
