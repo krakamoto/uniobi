@@ -4,6 +4,7 @@ import { analyzeImages } from './ai/index.js';
 import { buildFinalMarkdown } from './markdown.js';
 import { selectWikilinks, saveNotesToVault } from './vault.js';
 import { analyzeVaultStructure, matchSubject, suggestedSubjectPath } from './vault-analysis.js';
+import { materializeFiguresForNotes } from './figures.js';
 import { newId, nowIso, uniqueStrings } from './utils.js';
 
 function delay(ms) {
@@ -132,6 +133,7 @@ export function createWorker({ config, store }) {
           aliases: uniqueStrings([title, ...(note.aliases || [])]),
           keyConcepts: note.keyConcepts || [],
           conceptRelations: note.conceptRelations || [],
+          figures: note.figures || [],
           confidence: note.confidence,
           warnings: note.warnings || [],
           links,
@@ -192,11 +194,16 @@ export function createWorker({ config, store }) {
       });
 
       if (config.autoSaveToVault) {
+        const materializedNotes = await materializeFiguresForNotes({
+          notes: preparedNotes,
+          job,
+          config
+        });
         const saved = saveNotesToVault({
           vaultPath: config.vaultPath,
           notesSubdir: config.notesSubdir,
           relativeDir: destinationSubjectPath,
-          notes: preparedNotes.map((note) => ({
+          notes: materializedNotes.map((note) => ({
             title: note.title,
             date: baseDate,
             markdown: note.markdown
@@ -206,7 +213,11 @@ export function createWorker({ config, store }) {
           idGenerator: newId,
           subjectRoots: config.obsidianSubjectRoots
         });
+        resultJson.notes = materializedNotes;
+        resultJson.markdown = materializedNotes[0]?.markdown || '';
         store.updateJob(jobId, {
+          markdown: resultJson.markdown,
+          result_json: resultJson,
           vault_path: saved[0]?.relativePath || null,
           vault_paths_json: saved.map((item) => item.relativePath)
         });

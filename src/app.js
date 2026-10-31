@@ -7,6 +7,7 @@ import { newId, nowIso, isPathInside, uniqueStrings, parseJsonSafe } from './uti
 import { saveNotesToVault, vaultIsWritable } from './vault.js';
 import { createWebdavHandler } from './webdav.js';
 import { analyzeVaultStructure, matchSubject, rebuildAllVaultArtifacts, suggestedSubjectPath } from './vault-analysis.js';
+import { materializeFiguresForNotes } from './figures.js';
 
 const MIME_EXTENSIONS = {
   'image/jpeg': '.jpg',
@@ -283,7 +284,7 @@ export function createApp({ config, store, worker }) {
     res.status(202).json({ job: jobSummary(updated) });
   });
 
-  app.post('/api/jobs/:id/save-to-vault', requireAuth, (req, res) => {
+  app.post('/api/jobs/:id/save-to-vault', requireAuth, async (req, res) => {
     const job = store.getJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Job non trovato.' });
     if (job.status !== 'completed') {
@@ -308,24 +309,37 @@ export function createApp({ config, store, worker }) {
           course: job.course,
           config
         });
+      const notesForSave = resultNotes.length === 1 && job.markdown
+        ? [{ ...resultNotes[0], markdown: job.markdown }]
+        : resultNotes;
+      const materializedNotes = await materializeFiguresForNotes({
+        notes: notesForSave,
+        job,
+        config
+      });
       const saved = saveNotesToVault({
         vaultPath: config.vaultPath,
         notesSubdir: config.notesSubdir,
         relativeDir: destinationSubjectPath,
-        notes: resultNotes.map((note, index) => ({
+        notes: materializedNotes.map((note) => ({
           title: note.title,
           date: job.lesson_date,
-          markdown: resultNotes.length === 1 && job.markdown ? job.markdown : note.markdown
+          markdown: note.markdown
         })),
         jobId: job.id,
         store,
         idGenerator: newId,
         subjectRoots: config.obsidianSubjectRoots
       });
+      const updatedResult = job.result_json
+        ? { ...job.result_json, notes: materializedNotes, figures: materializedNotes.flatMap((note) => note.figures || []) }
+        : job.result_json;
       const updated = store.updateJob(job.id, {
+        markdown: materializedNotes[0]?.markdown || job.markdown,
+        result_json: updatedResult,
         vault_path: saved[0]?.relativePath || null,
         vault_paths_json: saved.map((item) => item.relativePath),
-        warnings_json: uniqueStrings([...(job.warnings_json || []), ...(req.body?.warnings || [])])
+        warnings_json: uniqueStrings([...(job.warnings_json || []), ...(req.body?.warnings || []), ...materializedNotes.flatMap((note) => note.warnings || [])])
       });
       res.status(201).json({ ok: true, vaultPath: saved[0]?.relativePath || null, vaultPaths: saved.map((item) => item.relativePath), job: publicJob(updated) });
     } catch (error) {

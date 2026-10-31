@@ -6,12 +6,26 @@ import { ollamaAnalyze } from './ollama.js';
 import { geminiAnalyze } from './gemini.js';
 import { uniqueStrings } from '../utils.js';
 import { buildAiVaultContext } from '../vault-analysis.js';
+import sharp from 'sharp';
 
-export function serializeImage(file) {
-  const buffer = readFileSync(file.absolutePath);
+export async function serializeImage(file) {
+  const original = readFileSync(file.absolutePath);
+  let buffer = original;
+  let mimeType = file.mimeType || 'image/jpeg';
+  try {
+    buffer = await sharp(original)
+      .rotate()
+      .resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true })
+      .flatten({ background: '#ffffff' })
+      .jpeg({ quality: 86, mozjpeg: true })
+      .toBuffer();
+    mimeType = 'image/jpeg';
+  } catch {
+    // Se il formato non è supportato da sharp, invia l'originale al provider.
+  }
   return {
-    mimeType: file.mimeType || 'image/jpeg',
-    dataUrl: `data:${file.mimeType || 'image/jpeg'};base64,${buffer.toString('base64')}`,
+    mimeType,
+    dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
     base64: buffer.toString('base64'),
     name: path.basename(file.absolutePath)
   };
@@ -60,6 +74,15 @@ function normalizeSingleNote(result, fallback = {}) {
         label: String(relation?.label || '').trim()
       })).filter((relation) => relation.from && relation.to)
     : [];
+  const figures = Array.isArray(raw.figures)
+    ? raw.figures.map((figure, index) => ({
+        id: String(figure?.id || `fig${index + 1}`).trim(),
+        sourceImageIndex: Number.isInteger(Number(figure?.sourceImageIndex)) ? Number(figure.sourceImageIndex) : 0,
+        bbox: Array.isArray(figure?.bbox) ? figure.bbox.map(Number) : figure?.bbox,
+        caption: String(figure?.caption || figure?.label || '').trim(),
+        kind: String(figure?.kind || 'diagram').trim()
+      })).filter((figure) => figure.caption || figure.bbox)
+    : [];
   return {
     title,
     course: String(raw.course || fallback.course || '').trim(),
@@ -72,6 +95,7 @@ function normalizeSingleNote(result, fallback = {}) {
     extractedText: String(raw.extractedText || raw.extracted_text || '').trim(),
     keyConcepts: uniqueStrings(Array.isArray(raw.keyConcepts) ? raw.keyConcepts : []),
     conceptRelations,
+    figures,
     markdown,
     links,
     confidence: Number.isFinite(Number(raw.confidence)) ? Math.max(0, Math.min(1, Number(raw.confidence))) : 0.5,
@@ -117,6 +141,7 @@ export function normalizeAiResult(raw, fallback = {}) {
     extractedText: notes.map((note) => note.extractedText).filter(Boolean).join('\n\n'),
     keyConcepts: uniqueStrings(notes.flatMap((note) => note.keyConcepts)),
     conceptRelations: notes.flatMap((note) => note.conceptRelations),
+    figures: notes.flatMap((note) => note.figures),
     markdown: notes[0].markdown,
     links: notes.flatMap((note) => note.links),
     confidence: overallConfidence,
@@ -174,7 +199,7 @@ export function shouldUseAdvancedFallback(result, files, config) {
 }
 
 export async function analyzeImages({ config, files, metadata, vaultNotes, vaultAnalysis, matchedSubject }) {
-  const images = files.map(serializeImage);
+  const images = await Promise.all(files.map(serializeImage));
   const existingTitles = vaultNotes
     .map((note) => note.title)
     .filter(Boolean)
@@ -207,6 +232,7 @@ Regole precise basate sul vault reale:
 6. Inserisci wikilink [[Titolo nota]] solo verso titoli presenti nell'elenco delle note esistenti. Non inventare wikilink.
 7. Valuta se le immagini contengono argomenti chiaramente distinti. Se sì, dividi il materiale in note atomiche separate, una per argomento, con un massimo di 6 note. Se le immagini sono pagine consecutive dello stesso argomento, genera una sola nota.
 8. Ogni nota deve essere autonoma: titolo specifico, riassunto, contenuto completo, concetti chiave, tag e collegamenti. Inserisci wikilink tra le nuove note quando sono correlate, usando il titolo della nota come target.
+8b. Per schemi, grafici, tabelle, circuiti o disegni presenti nelle immagini, NON ridisegnarli e NON inventare immagini o URL. Restituisci un array figures con ritaglio dell'immagine originale: id, sourceImageIndex (indice 0-based dell'immagine caricata), bbox normalizzato [x,y,width,height] da 0 a 1, caption e kind. Inserisci nel markdown il placeholder {{id}} nel punto in cui deve comparire la figura. Se non ci sono figure da ritagliare, usa figures: [].
 9. Estrai 3-10 concetti chiave atomici e alcune relazioni concettuali per ogni nota. Usa termini coerenti con la terminologia delle note esistenti.
 10. Non includere frontmatter YAML: il backend lo genera. Il campo markdown deve contenere solo il corpo della nota.
 11. Restituisci ESCLUSIVAMENTE un oggetto JSON valido, senza testo fuori dal JSON, con questa forma:
@@ -227,6 +253,7 @@ Regole precise basate sul vault reale:
       "extractedText": "Trascrizione testuale della porzione di appunti relativa a questa nota",
       "keyConcepts": ["concetto 1", "concetto 2"],
       "conceptRelations": [{"from": "concetto 1", "to": "concetto 2", "label": "relazione"}],
+      "figures": [{"id": "fig1", "sourceImageIndex": 0, "bbox": [0.10, 0.30, 0.55, 0.25], "caption": "Schema del sistema", "kind": "diagram"}],
       "markdown": "# Titolo\\n\\n## Contenuto\\n...",
       "links": [{"target": "Titolo di un'altra nota del gruppo o nota esistente", "reason": "Motivo", "exists": true}],
       "confidence": 0.0,
