@@ -23,6 +23,8 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -31,6 +33,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -71,7 +74,9 @@ public class MainActivity extends Activity {
 
     private EditText serverUrlInput;
     private EditText passwordInput;
-    private EditText courseInput;
+    private Spinner courseSpinner;
+    private ArrayAdapter<String> courseAdapter;
+    private final List<String> courseNames = new ArrayList<>();
     private EditText dateInput;
     private EditText titleInput;
     private EditText tagsInput;
@@ -102,6 +107,7 @@ public class MainActivity extends Activity {
         api = new ApiClient(prefs.getString("server_url", "http://10.0.2.2:3000"));
         api.setCookie(prefs.getString("session_cookie", ""));
         buildUi();
+        loadCourses();
         checkServerAndAuth();
     }
 
@@ -226,14 +232,41 @@ public class MainActivity extends Activity {
         card.addView(previewScroll, matchTop(dp(10)));
         renderSelectedFiles();
 
-        courseInput = editText("Es. Analisi Matematica II", InputType.TYPE_CLASS_TEXT);
-        card.addView(field("Corso", courseInput), matchTop(dp(12)));
+        LinearLayout courseField = new LinearLayout(this);
+        courseField.setOrientation(LinearLayout.VERTICAL);
+        courseField.addView(text("Corso", 12, Color.rgb(62, 57, 82), Typeface.BOLD));
+        LinearLayout courseRow = new LinearLayout(this);
+        courseRow.setOrientation(LinearLayout.HORIZONTAL);
+        courseRow.setGravity(Gravity.CENTER_VERTICAL);
+        courseSpinner = new Spinner(this);
+        courseAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, courseNames);
+        courseAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        courseSpinner.setAdapter(courseAdapter);
+        courseSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                prefs.edit().putString("selected_course", getSelectedCourse()).apply();
+            }
 
-        dateInput = editText("AAAA-MM-GG", InputType.TYPE_CLASS_DATETIME);
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+        courseRow.addView(courseSpinner, weighted());
+        Button addCourse = secondaryButton("+ Corso");
+        addCourse.setMinHeight(dp(42));
+        addCourse.setOnClickListener(view -> showCreateCourseDialog());
+        LinearLayout.LayoutParams addCourseParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        addCourseParams.setMarginStart(dp(8));
+        courseRow.addView(addCourse, addCourseParams);
+        courseField.addView(courseRow, matchTop(dp(6)));
+        card.addView(courseField, matchTop(dp(12)));
+
+        dateInput = editText("AAAA-MM-GG (facoltativa)", InputType.TYPE_CLASS_DATETIME);
         dateInput.setFocusable(false);
         dateInput.setClickable(true);
         dateInput.setOnClickListener(view -> chooseDate());
-        card.addView(field("Data lezione", dateInput), matchTop(dp(10)));
+        card.addView(field("Data lezione (opzionale)", dateInput), matchTop(dp(10)));
 
         titleInput = editText("Es. Integrali doppi", InputType.TYPE_CLASS_TEXT);
         card.addView(field("Titolo (opzionale)", titleInput), matchTop(dp(10)));
@@ -306,6 +339,108 @@ public class MainActivity extends Activity {
         }
     }
 
+    private static final String COURSE_PLACEHOLDER = "— Seleziona un corso —";
+
+    private void loadCourses() {
+        courseNames.clear();
+        courseNames.add(COURSE_PLACEHOLDER);
+        String stored = prefs.getString("courses_json", "[]");
+        try {
+            JSONArray array = new JSONArray(stored);
+            for (int i = 0; i < array.length(); i++) {
+                String name = array.optString(i, "").trim();
+                if (!name.isEmpty() && !courseNames.contains(name)) courseNames.add(name);
+            }
+        } catch (Exception ignored) {
+        }
+        if (courseAdapter != null) courseAdapter.notifyDataSetChanged();
+        String selected = prefs.getString("selected_course", "");
+        int index = selected.isEmpty() ? 0 : courseNames.indexOf(selected);
+        if (index > 0 && courseSpinner != null) courseSpinner.setSelection(index);
+    }
+
+    private void saveCourses() {
+        JSONArray array = new JSONArray();
+        for (String name : courseNames) {
+            if (!COURSE_PLACEHOLDER.equals(name)) array.put(name);
+        }
+        prefs.edit().putString("courses_json", array.toString()).apply();
+    }
+
+    private void addCourse(String name) {
+        String clean = name == null ? "" : name.trim();
+        if (clean.isEmpty()) {
+            toast("Inserisci il nome del corso.");
+            return;
+        }
+        int existing = courseNames.indexOf(clean);
+        if (existing <= 0) {
+            courseNames.add(clean);
+            courseAdapter.notifyDataSetChanged();
+            existing = courseNames.size() - 1;
+            saveCourses();
+        }
+        courseSpinner.setSelection(existing);
+        prefs.edit().putString("selected_course", clean).apply();
+        toast("Corso salvato: " + clean);
+    }
+
+    private void showCreateCourseDialog() {
+        EditText input = editText("Es. Meccanica del volo", InputType.TYPE_CLASS_TEXT);
+        input.setPadding(dp(14), dp(10), dp(14), dp(10));
+        new AlertDialog.Builder(this)
+            .setTitle("Nuovo corso")
+            .setMessage("Il corso resterà salvato sul telefono e potrai selezionarlo ai prossimi caricamenti.")
+            .setView(input)
+            .setNegativeButton("Annulla", null)
+            .setPositiveButton("Crea corso", (dialog, which) -> addCourse(input.getText().toString()))
+            .show();
+    }
+
+    private String getSelectedCourse() {
+        if (courseSpinner == null || courseSpinner.getSelectedItem() == null) return "";
+        String value = courseSpinner.getSelectedItem().toString();
+        return COURSE_PLACEHOLDER.equals(value) ? "" : value;
+    }
+
+    private void fetchServerCourses() {
+        executor.execute(() -> {
+            try {
+                ApiResponse response = api.get("/api/courses");
+                if (!response.isOk()) return;
+                JSONObject payload = new JSONObject(response.body);
+                JSONArray rows = payload.optJSONArray("courses");
+                if (rows == null) return;
+                List<String> names = new ArrayList<>();
+                for (int i = 0; i < rows.length(); i++) {
+                    JSONObject row = rows.optJSONObject(i);
+                    if (row == null) continue;
+                    String name = row.optString("course", "").trim();
+                    if (!name.isEmpty()) names.add(name);
+                }
+                runOnUiThread(() -> mergeServerCourses(names));
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    private void mergeServerCourses(List<String> names) {
+        boolean changed = false;
+        String selected = getSelectedCourse();
+        for (String name : names) {
+            if (!name.isEmpty() && !courseNames.contains(name)) {
+                courseNames.add(name);
+                changed = true;
+            }
+        }
+        if (changed) {
+            courseAdapter.notifyDataSetChanged();
+            saveCourses();
+        }
+        int index = selected.isEmpty() ? 0 : courseNames.indexOf(selected);
+        if (index > 0) courseSpinner.setSelection(index);
+    }
+
     private void saveServerAndConnect() {
         String value = serverUrlInput.getText().toString().trim();
         if (value.isEmpty()) {
@@ -334,7 +469,10 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     uploadStatus.setText(authenticated ? "Server connesso." : "Server connesso, accesso richiesto.");
                     loginCard.setVisibility(passwordRequired && !authenticated ? View.VISIBLE : View.GONE);
-                    if (authenticated) loadJobs(true);
+                    if (authenticated) {
+                        loadJobs(true);
+                        fetchServerCourses();
+                    }
                 });
             } catch (Exception error) {
                 runOnUiThread(() -> {
@@ -476,7 +614,7 @@ public class MainActivity extends Activity {
         }
         List<UploadPart> files = new ArrayList<>(selectedFiles);
         Map<String, String> fields = new LinkedHashMap<>();
-        fields.put("course", courseInput.getText().toString().trim());
+        fields.put("course", getSelectedCourse());
         fields.put("lesson_date", dateInput.getText().toString().trim());
         fields.put("title", titleInput.getText().toString().trim());
         fields.put("tags", tagsInput.getText().toString().trim());
@@ -503,7 +641,6 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     selectedFiles.clear();
                     renderSelectedFiles();
-                    courseInput.setText("");
                     dateInput.setText("");
                     titleInput.setText("");
                     tagsInput.setText("");

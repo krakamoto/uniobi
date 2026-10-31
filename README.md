@@ -233,6 +233,9 @@ L’app Android nativa si trova in `android/` e usa il backend UniAi come proxy 
 - login opzionale con `APP_PASSWORD`;
 - fotocamera e selezione multipla dalla galleria;
 - anteprima e rimozione delle immagini;
+- gestione dei corsi: creazione, salvataggio locale e selezione da menu;
+- importazione automatica dei corsi già presenti sul backend;
+- data lezione opzionale;
 - upload multipart con corso, data, titolo, tag e istruzioni;
 - storico delle elaborazioni con aggiornamento automatico;
 - dettaglio con Markdown modificabile, warning e wikilink;
@@ -353,6 +356,26 @@ https://tuo-dominio/webdav/
 > La sincronizzazione è bidirezionale ma non è un filesystem montato: Remotely Save sincronizza quando viene avviato o secondo la pianificazione configurata. Evita modifiche simultanee dello stesso file da dispositivi diversi per non creare conflitti.
 
 Per una sincronizzazione continua in tempo reale è possibile usare Syncthing tra server e telefono come alternativa a WebDAV, ma richiede l'installazione di Syncthing su entrambi i dispositivi.
+
+## Numerazione e nomi delle note
+
+Le note generate non usano più la data nel nome file. UniAi assegna un numero progressivo a tre cifre, separato per ogni materia:
+
+```text
+001 Introduzione ai sistemi di controllo e al feedback.md
+002 Dinamica del volo.md
+003 Stabilità e risposta in frequenza.md
+```
+
+La numerazione:
+
+- viene calcolata dalla cartella della materia;
+- parte da `001`;
+- usa il numero massimo esistente + 1;
+- non sovrascrive mai una nota esistente;
+- mantiene l’ordine alfabetico corretto anche quando il vault viene sincronizzato tra dispositivi.
+
+La data della lezione è opzionale e, quando presente, resta solo nel frontmatter e nei metadati del job.
 
 ## Indici per materia
 

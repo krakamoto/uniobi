@@ -335,7 +335,7 @@ function indexRowsForNotes(subject) {
   const sections = [];
   for (const [label, notes] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'it'))) {
     const rows = notes
-      .sort((a, b) => a.title.localeCompare(b.title, 'it'))
+      .sort((a, b) => a.basename.localeCompare(b.basename, 'it', { numeric: true }))
       .map((note) => {
         const display = note.title.replace(/\|/g, '—');
         const target = note.relativePath.replace(/\.md$/i, '').replace(/\|/g, '—');

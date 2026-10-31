@@ -10,7 +10,7 @@ import {
   rebuildAllVaultArtifacts,
   rebuildArtifactsForFile
 } from '../src/vault-analysis.js';
-import { saveNoteToVault } from '../src/vault.js';
+import { safeVaultDestination, saveNoteToVault } from '../src/vault.js';
 import { validateLatexDelimiters } from '../src/markdown.js';
 
 test('analisi del vault: riconosce materie e genera gli indici', () => {
@@ -79,6 +79,41 @@ test('gli indici generati non spezzano le formule LaTeX', () => {
     const index = readFileSync(path.join(subjectDir, '_Indice.md'), 'utf8');
     assert.equal(validateLatexDelimiters(index).valid, true);
     assert.match(index, /\$\$|…/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test('le note usano numerazione progressiva 001, 002 senza data', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-numbering-'));
+  const subjectDir = path.join(root, 'uni', 'Uni', 'magistrale', 'nuova materia');
+  mkdirSync(subjectDir, { recursive: true });
+  try {
+    const first = safeVaultDestination({
+      vaultPath: root,
+      relativeDir: 'uni/Uni/magistrale/nuova materia',
+      title: 'Prima nota',
+      date: '2025-10-31'
+    });
+    assert.match(path.basename(first), /^001 Prima nota\.md$/);
+    writeFileSync(first, '# Prima nota\n');
+
+    const second = safeVaultDestination({
+      vaultPath: root,
+      relativeDir: 'uni/Uni/magistrale/nuova materia',
+      title: 'Seconda nota',
+      date: '2025-11-01'
+    });
+    assert.match(path.basename(second), /^002 Seconda nota\.md$/);
+    assert.ok(!path.basename(second).includes('2025-11-01'));
+    writeFileSync(second, '# Seconda nota\n');
+
+    const index = rebuildAllVaultArtifacts(root, { subjectRoots: ['uni/Uni/magistrale'] });
+    assert.equal(index.analysis.subjects.length, 1);
+    const text = readFileSync(path.join(subjectDir, '_Indice.md'), 'utf8');
+    assert.match(text, /001 Prima nota/);
+    assert.match(text, /002 Seconda nota/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

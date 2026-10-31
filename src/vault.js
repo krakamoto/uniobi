@@ -2,7 +2,7 @@ import {
   readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, renameSync, existsSync, unlinkSync
 } from 'node:fs';
 import path from 'node:path';
-import { dateForFilename, isPathInside, normalizeTitle, sanitizeFilename, sha256, uniqueStrings } from './utils.js';
+import { isPathInside, normalizeTitle, sanitizeFilename, sha256, uniqueStrings } from './utils.js';
 import { rebuildArtifactsForFile } from './vault-analysis.js';
 
 const IGNORED_DIRS = new Set(['.obsidian', '.trash', '.git', 'node_modules']);
@@ -155,6 +155,30 @@ export function selectWikilinks({ aiLinks = [], markdown = '', course = '', titl
   return selected.slice(0, 12);
 }
 
+function nextNoteNumber(directory) {
+  let maximum = 0;
+  function walk(current) {
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || IGNORED_DIRS.has(entry.name)) continue;
+      const absolute = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolute);
+      } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+        const match = entry.name.match(/^(\d{2,5})(?:\s|[-_.])/);
+        if (match) maximum = Math.max(maximum, Number(match[1]));
+      }
+    }
+  }
+  walk(directory);
+  return String(maximum + 1).padStart(3, '0');
+}
+
 export function safeVaultDestination({ vaultPath, notesSubdir, relativeDir, title, date }) {
   if (!vaultPath) throw new Error('OBSIDIAN_VAULT_PATH non configurato.');
   const targetRelative = relativeDir || notesSubdir || '';
@@ -162,14 +186,16 @@ export function safeVaultDestination({ vaultPath, notesSubdir, relativeDir, titl
   if (!isPathInside(path.resolve(vaultPath), targetDir) && targetDir !== path.resolve(vaultPath)) {
     throw new Error('La cartella di destinazione Obsidian non è valida.');
   }
-  const filenameBase = `${dateForFilename(date)} - ${sanitizeFilename(title, 'Appunti')}`;
   mkdirSync(targetDir, { recursive: true });
-  let candidate = path.join(targetDir, `${filenameBase}.md`);
-  let suffix = 2;
-  while (existsSync(candidate)) {
-    candidate = path.join(targetDir, `${filenameBase} (${suffix}).md`);
-    suffix += 1;
-  }
+  const cleanTitle = String(title || 'Appunti').replace(/^\d{2,5}[\s-]+/, '');
+  const filenameTitle = sanitizeFilename(cleanTitle, 'Appunti');
+  let number = Number(nextNoteNumber(targetDir));
+  let candidate;
+  do {
+    const prefix = String(number).padStart(3, '0');
+    candidate = path.join(targetDir, `${prefix} ${filenameTitle}.md`);
+    number += 1;
+  } while (existsSync(candidate));
   return candidate;
 }
 
@@ -192,9 +218,9 @@ export function saveNoteToVault({ vaultPath, notesSubdir, relativeDir, title, da
 
   try {
     const artifacts = rebuildArtifactsForFile(vaultPath, destination, { subjectRoots });
-    if (artifacts) console.log(`[vault] Indice e mappa aggiornati per ${artifacts.subject}`);
+    if (artifacts) console.log(`[vault] Indice aggiornato per ${artifacts.subject}`);
   } catch (error) {
-    console.error(`[vault] Impossibile aggiornare indice/mappa: ${error.message}`);
+    console.error(`[vault] Impossibile aggiornare l'indice: ${error.message}`);
   }
 
   return { absolutePath: destination, relativePath };
