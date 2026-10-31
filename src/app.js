@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { mkdirSync, rmSync } from 'node:fs';
 import { newId, nowIso, isPathInside, uniqueStrings, parseJsonSafe } from './utils.js';
 import { saveNoteToVault, vaultIsWritable } from './vault.js';
+import { createWebdavHandler } from './webdav.js';
 
 const MIME_EXTENSIONS = {
   'image/jpeg': '.jpg',
@@ -63,6 +64,10 @@ function publicJob(job, baseUrl = '') {
 export function createApp({ config, store, worker }) {
   const app = express();
   app.disable('x-powered-by');
+
+  // WebDAV deve essere montato prima del body parser JSON: PUT riceve file binari.
+  app.use(config.webdavPath, createWebdavHandler({ config }));
+
   app.use(express.json({ limit: '3mb' }));
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
@@ -86,7 +91,9 @@ export function createApp({ config, store, worker }) {
       aiProvider: config.aiProvider,
       vaultConfigured: Boolean(config.vaultPath),
       vaultWritable: vaultIsWritable(config.vaultPath, config.notesSubdir),
-      autoSaveToVault: config.autoSaveToVault
+      autoSaveToVault: config.autoSaveToVault,
+      webdavEnabled: config.webdavEnabled,
+      webdavPath: config.webdavPath
     });
   });
 

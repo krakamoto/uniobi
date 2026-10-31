@@ -24,6 +24,16 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     throw new Error('OBSIDIAN_NOTES_SUBDIR deve essere un percorso relativo e non può contenere "..".');
   }
 
+  const webdavEnabled = bool(env.WEBDAV_ENABLED, false);
+  const webdavPassword = env.WEBDAV_PASSWORD || '';
+  const webdavUsername = env.WEBDAV_USERNAME || 'uniai';
+  let webdavPath = String(env.WEBDAV_PATH || '/webdav').trim();
+  if (!webdavPath.startsWith('/')) webdavPath = `/${webdavPath}`;
+  webdavPath = webdavPath.replace(/\/+$/, '') || '/webdav';
+  if (webdavEnabled && !webdavPassword) {
+    throw new Error('WEBDAV_PASSWORD è obbligatoria quando WEBDAV_ENABLED=true.');
+  }
+
   const rawDatabase = String(env.DATABASE_URL || '').trim();
   const databaseRelative = rawDatabase
     .replace(/^sqlite:\/\/\//, '')
@@ -50,6 +60,11 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     autoSaveToVault: bool(env.AUTO_SAVE_TO_VAULT, false),
     allowCreateMissingWikilinks: bool(env.ALLOW_CREATE_MISSING_WIKILINKS, false),
     workerPollMs: number(env.WORKER_POLL_MS, 1500),
+    webdavEnabled,
+    webdavUsername,
+    webdavPassword,
+    webdavPath,
+    webdavMaxUploadMb: number(env.WEBDAV_MAX_UPLOAD_MB, 50),
     publicDir: path.join(projectRoot, 'public'),
     version: '1.0.0'
   };

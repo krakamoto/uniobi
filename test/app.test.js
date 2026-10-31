@@ -61,7 +61,12 @@ test('flusso end-to-end: upload, analisi mock, salvataggio atomico nel vault', a
     AI_PROVIDER: 'mock',
     AUTO_SAVE_TO_VAULT: 'false',
     ALLOW_CREATE_MISSING_WIKILINKS: 'false',
-    WORKER_POLL_MS: '0'
+    WORKER_POLL_MS: '0',
+    WEBDAV_ENABLED: 'true',
+    WEBDAV_PATH: '/webdav',
+    WEBDAV_USERNAME: 'uniai',
+    WEBDAV_PASSWORD: 'test-webdav-password',
+    WEBDAV_MAX_UPLOAD_MB: '5'
   }, root);
 
   const store = createStore(config.databasePath);
@@ -127,6 +132,49 @@ test('flusso end-to-end: upload, analisi mock, salvataggio atomico nel vault', a
     body: '{}'
   });
   assert.equal(duplicateResponse.status, 409);
+
+  // WebDAV: autenticazione, PROPFIND, PUT, GET e sincronizzazione bidirezionale col vault.
+  const unauthorizedDav = await fetch(`${baseUrl}/webdav/`, { method: 'PROPFIND' });
+  assert.equal(unauthorizedDav.status, 401);
+
+  const webdavAuth = `Basic ${Buffer.from('uniai:test-webdav-password').toString('base64')}`;
+  const davRoot = await fetch(`${baseUrl}/webdav/`, {
+    method: 'PROPFIND',
+    headers: { Authorization: webdavAuth, Depth: '1' }
+  });
+  assert.equal(davRoot.status, 207);
+  const davRootXml = await davRoot.text();
+  assert.match(davRootXml, /Analisi Matematica II\.md/);
+
+  const davPut = await fetch(`${baseUrl}/webdav/Sync/da-telefono.md`, {
+    method: 'PUT',
+    headers: { Authorization: webdavAuth, 'Content-Type': 'text/markdown' },
+    body: '# Nota sincronizzata\n\nCreata dal client WebDAV.\n'
+  });
+  assert.equal(davPut.status, 201);
+  assert.ok(existsSync(path.join(vaultPath, 'Sync', 'da-telefono.md')));
+
+  const davGet = await fetch(`${baseUrl}/webdav/Sync/da-telefono.md`, {
+    headers: { Authorization: webdavAuth }
+  });
+  assert.equal(davGet.status, 200);
+  assert.match(await davGet.text(), /Nota sincronizzata/);
+
+  const davFolder = await fetch(`${baseUrl}/webdav/NuovaCartella/`, {
+    method: 'MKCOL',
+    headers: { Authorization: webdavAuth }
+  });
+  assert.equal(davFolder.status, 201);
+
+  const davMove = await fetch(`${baseUrl}/webdav/Sync/da-telefono.md`, {
+    method: 'MOVE',
+    headers: {
+      Authorization: webdavAuth,
+      Destination: `${baseUrl}/webdav/NuovaCartella/spostata.md`
+    }
+  });
+  assert.equal(davMove.status, 201);
+  assert.ok(existsSync(path.join(vaultPath, 'NuovaCartella', 'spostata.md')));
 });
 
 test('scanVault legge titoli e alias dalle note esistenti', () => {

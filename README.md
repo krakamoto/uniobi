@@ -126,6 +126,11 @@ Tutte le variabili sono documentate in `.env.example`:
 | `AI_BASE_URL` | vuota | Base URL del provider |
 | `AI_JSON_MODE` | `true` | Richiede output JSON al provider OpenAI-compatibile |
 | `WORKER_POLL_MS` | `1500` | Pausa tra i job del worker |
+| `WEBDAV_ENABLED` | `false` | Abilita il server WebDAV per Obsidian Mobile |
+| `WEBDAV_PATH` | `/webdav` | Percorso HTTP del server WebDAV |
+| `WEBDAV_USERNAME` | `uniai` | Utente WebDAV |
+| `WEBDAV_PASSWORD` | vuota | Password WebDAV; obbligatoria se abilitato |
+| `WEBDAV_MAX_UPLOAD_MB` | `50` | Dimensione massima di un file WebDAV |
 
 > Attenzione: `AUTO_SAVE_TO_VAULT=true` salva la nota senza revisione manuale. La scrittura è atomica e non sovrascrive file, ma è consigliabile controllare il risultato con il provider reale.
 
@@ -164,6 +169,7 @@ Tutte le variabili sono documentate in `.env.example`:
 | `POST` | `/api/jobs/:id/retry` | Rielabora |
 | `POST` | `/api/jobs/:id/save-to-vault` | Salva la nota nel vault |
 | `GET` | `/api/courses` | Corsi presenti nello storico |
+| `PROPFIND/GET/PUT/...` | `/webdav/*` | Sincronizzazione WebDAV del vault Obsidian |
 
 ## App Android
 
@@ -225,6 +231,76 @@ APK: android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 La build è stata eseguita con Gradle 8.10.2, AGP 8.7.3, JDK 17 e Android SDK 35. Non era disponibile un dispositivo/emulatore collegato per un test UI manuale.
+
+## Sincronizzazione reale con Obsidian Mobile
+
+UniAi include un server **WebDAV** integrato. Il vault Obsidian resta sul server, ma Obsidian Mobile può sincronizzarlo in entrambe le direzioni tramite il plugin community **Remotely Save**.
+
+### 1. Configura il server
+
+Aggiungi al `.env`:
+
+```env
+WEBDAV_ENABLED=true
+WEBDAV_PATH=/webdav
+WEBDAV_USERNAME=uniai
+WEBDAV_PASSWORD=una-password-lunga-e-casuale
+WEBDAV_MAX_UPLOAD_MB=50
+```
+
+Riavvia il backend:
+
+```bash
+npm start
+```
+
+Verifica:
+
+```text
+http://IP_DEL_SERVER:3000/api/health
+```
+
+La risposta deve contenere:
+
+```json
+{
+  "webdavEnabled": true,
+  "webdavPath": "/webdav"
+}
+```
+
+### 2. Configura Obsidian Mobile
+
+1. Installa Obsidian sul telefono.
+2. Apri il vault locale che vuoi sincronizzare.
+3. Installa il plugin community **Remotely Save**.
+4. Apri le impostazioni del plugin.
+5. Seleziona come servizio remoto **WebDAV**.
+6. Inserisci:
+   - Server URL: `http://IP_DEL_SERVER:3000/webdav/`
+   - Username: `uniai`
+   - Password: quella impostata in `WEBDAV_PASSWORD`
+7. Premi **Check Connection**.
+8. Scegli la sincronizzazione bidirezionale.
+9. Avvia la sincronizzazione.
+
+Su una rete locale puoi usare HTTP. Fuori dalla LAN usa HTTPS tramite Caddy o Nginx e cambia l'URL in:
+
+```text
+https://tuo-dominio/webdav/
+```
+
+### 3. Come funziona
+
+- Le note generate da UniAi vengono scritte nella stessa cartella del vault.
+- Remotely Save scarica le modifiche sul telefono.
+- Le note create o modificate su Obsidian Mobile vengono caricate sul server.
+- Il server WebDAV è confinato al percorso `OBSIDIAN_VAULT_PATH` e impedisce path traversal.
+- L'accesso WebDAV è protetto da Basic Auth.
+
+> La sincronizzazione è bidirezionale ma non è un filesystem montato: Remotely Save sincronizza quando viene avviato o secondo la pianificazione configurata. Evita modifiche simultanee dello stesso file da dispositivi diversi per non creare conflitti.
+
+Per una sincronizzazione continua in tempo reale è possibile usare Syncthing tra server e telefono come alternativa a WebDAV, ma richiede l'installazione di Syncthing su entrambi i dispositivi.
 
 ## Test
 
