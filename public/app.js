@@ -206,6 +206,9 @@ async function loadJobs({ silent = false } = {}) {
 function renderDialog(job) {
   state.selectedJob = job;
   const result = job.result_json || {};
+  const generatedNotes = Array.isArray(result.notes) ? result.notes : [];
+  const multiNote = generatedNotes.length > 1;
+  const isSaved = Boolean(job.vault_path) || (Array.isArray(job.vault_paths) && job.vault_paths.length > 0);
   const links = job.links_json || result.links || [];
   const warnings = job.warnings_json || result.warnings || [];
   const title = result.title || job.requested_title || job.course || 'Appunti';
@@ -221,7 +224,7 @@ function renderDialog(job) {
   const errorHtml = job.error ? `<div class="error-box">${escapeHtml(job.error)}</div>` : '';
 
   let content = '';
-  if (job.status === 'completed' && job.markdown) {
+  if (job.status === 'completed' && (job.markdown || generatedNotes.length > 0)) {
     content = `
       <div class="detail-grid">
         <div class="detail-card">
@@ -239,21 +242,34 @@ function renderDialog(job) {
         </div>
       </div>
       <div class="detail-card" style="margin-top:18px"><h3>Immagini originali</h3><div class="thumb-grid">${thumbs}</div></div>
-      <div class="editor-grid">
-        <div>
-          <h3 style="font-size:14px;margin:0 0 8px">Markdown modificabile</h3>
-          <textarea id="markdown-editor" spellcheck="false">${escapeHtml(job.markdown)}</textarea>
+      ${multiNote ? `
+        <div class="detail-card" style="margin-top:18px">
+          <h3>${generatedNotes.length} note separate per argomento</h3>
+          <p>UniAi ha diviso il gruppo di immagini in note atomiche. Tutte verranno salvate nel vault.</p>
+          ${generatedNotes.map((note, index) => `
+            <div class="detail-card" style="margin-top:12px">
+              <h3>${index + 1}. ${escapeHtml(note.title || 'Nota')}</h3>
+              ${note.summary ? `<p>${escapeHtml(note.summary)}</p>` : ''}
+              <div class="markdown-preview">${renderMarkdown(note.markdown || '')}</div>
+            </div>`).join('')}
         </div>
-        <div>
-          <h3 style="font-size:14px;margin:0 0 8px">Anteprima Obsidian</h3>
-          <div id="markdown-preview" class="markdown-preview">${renderMarkdown(job.markdown)}</div>
+      ` : `
+        <div class="editor-grid">
+          <div>
+            <h3 style="font-size:14px;margin:0 0 8px">Markdown modificabile</h3>
+            <textarea id="markdown-editor" spellcheck="false">${escapeHtml(job.markdown)}</textarea>
+          </div>
+          <div>
+            <h3 style="font-size:14px;margin:0 0 8px">Anteprima Obsidian</h3>
+            <div id="markdown-preview" class="markdown-preview">${renderMarkdown(job.markdown)}</div>
+          </div>
         </div>
-      </div>
+      `}
       <div class="dialog-actions">
-        <button id="copy-markdown" class="btn btn-secondary" type="button">Copia Markdown</button>
-        <button id="save-edits" class="btn btn-secondary" type="button">Salva modifiche</button>
-        <button id="save-vault" class="btn btn-primary" type="button" ${job.vault_path ? 'disabled' : ''}>Salva nel vault Obsidian</button>
-        ${job.vault_path ? `<span class="saved-banner">Già salvata in: ${escapeHtml(job.vault_path)}</span>` : ''}
+        ${multiNote ? '' : '<button id="copy-markdown" class="btn btn-secondary" type="button">Copia Markdown</button>'}
+        ${multiNote ? '' : '<button id="save-edits" class="btn btn-secondary" type="button">Salva modifiche</button>'}
+        <button id="save-vault" class="btn btn-primary" type="button" ${isSaved ? 'disabled' : ''}>Salva ${multiNote ? 'le note' : 'nel vault Obsidian'}</button>
+        ${isSaved ? `<span class="saved-banner">${multiNote ? `${(job.vault_paths || []).length || generatedNotes.length} note salvate nel vault` : `Già salvata in: ${escapeHtml(job.vault_path)}`}</span>` : ''}
       </div>`;
   } else if (job.status === 'failed') {
     content = `
@@ -284,6 +300,7 @@ function renderDialog(job) {
     });
   }
   $('#copy-markdown')?.addEventListener('click', async () => {
+    if (!editor) return;
     await navigator.clipboard.writeText(editor.value);
     showToast('Markdown copiato negli appunti.', 'success');
   });
@@ -341,7 +358,8 @@ async function saveToVault(jobId) {
       if (!ok) return;
     }
     const data = await api(`/api/jobs/${jobId}/save-to-vault`, { method: 'POST', body: '{}' });
-    showToast(`Nota salvata nel vault: ${data.vaultPath}`, 'success');
+    const savedPaths = Array.isArray(data.vaultPaths) ? data.vaultPaths : [];
+    showToast(savedPaths.length > 1 ? `${savedPaths.length} note salvate nel vault.` : `Nota salvata nel vault: ${data.vaultPath}`, 'success');
     await refreshJob(jobId, true);
     await loadJobs({ silent: true });
   } catch (error) {

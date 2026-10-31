@@ -357,6 +357,22 @@ https://tuo-dominio/webdav/
 
 Per una sincronizzazione continua in tempo reale è possibile usare Syncthing tra server e telefono come alternativa a WebDAV, ma richiede l'installazione di Syncthing su entrambi i dispositivi.
 
+## Divisione automatica in più note
+
+Un singolo caricamento può contenere più argomenti distinti. L’AI valuta il contenuto e può generare:
+
+- una sola nota, se le immagini sono pagine consecutive dello stesso argomento;
+- più note atomiche, fino a un massimo di 6, se gli argomenti sono chiaramente distinti.
+
+Ogni nota ha titolo, riassunto, Markdown, tag, alias, concetti chiave e wikilink propri. Le note dello stesso gruppo possono collegarsi tra loro e vengono salvate con numerazione progressiva nella materia:
+
+```text
+001 Funzione di trasferimento.md
+002 Risposta in frequenza.md
+```
+
+Il job espone `result_json.notes` e l’API di salvataggio restituisce `vaultPaths`.
+
 ## Numerazione e nomi delle note
 
 Le note generate non usano più la data nel nome file. UniAi assegna un numero progressivo a tre cifre, separato per ogni materia:

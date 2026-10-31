@@ -3,7 +3,7 @@ import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { nowIso, parseJsonSafe } from './utils.js';
 
-const JSON_FIELDS = ['original_names', 'source_files', 'user_tags', 'result_json', 'links_json', 'warnings_json'];
+const JSON_FIELDS = ['original_names', 'source_files', 'user_tags', 'result_json', 'links_json', 'warnings_json', 'vault_paths_json'];
 
 function parseRow(row) {
   if (!row) return null;
@@ -39,6 +39,7 @@ export function createStore(databasePath) {
       confidence REAL,
       error TEXT,
       vault_path TEXT,
+      vault_paths_json TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       processed_at TEXT
@@ -58,6 +59,12 @@ export function createStore(databasePath) {
       FOREIGN KEY(job_id) REFERENCES jobs(id)
     );
   `);
+
+  try {
+    db.exec("ALTER TABLE jobs ADD COLUMN vault_paths_json TEXT NOT NULL DEFAULT '[]'");
+  } catch {
+    // Colonna già presente.
+  }
 
   const statements = {
     insertJob: db.prepare(`
@@ -101,7 +108,7 @@ export function createStore(databasePath) {
   const allowedColumns = new Set([
     'status', 'original_names', 'source_files', 'course', 'lesson_date', 'requested_title',
     'user_notes', 'user_tags', 'extracted_text', 'markdown', 'result_json', 'links_json',
-    'warnings_json', 'confidence', 'error', 'vault_path', 'processed_at'
+    'warnings_json', 'confidence', 'error', 'vault_path', 'vault_paths_json', 'processed_at'
   ]);
 
   function insertJob(job) {
@@ -131,7 +138,7 @@ export function createStore(databasePath) {
     if (entries.length === 0) return getJob(id);
     const sets = entries.map(([key]) => `${key} = ?`);
     const values = entries.map(([key, value]) => {
-      if (['source_files', 'user_tags', 'result_json', 'links_json', 'warnings_json'].includes(key)) {
+      if (['source_files', 'user_tags', 'result_json', 'links_json', 'warnings_json', 'vault_paths_json'].includes(key)) {
         return typeof value === 'string' ? value : JSON.stringify(value);
       }
       return value;

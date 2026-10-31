@@ -347,3 +347,82 @@ test('fallback automatico Gemini Flash → Gemini Pro su bassa confidenza', asyn
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+
+test('il modello può restituire più note separate per argomenti distinti', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-multinote-ai-'));
+  const imagePath = path.join(root, 'appunti.png');
+  writeFileSync(imagePath, PNG_1X1);
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify({
+    candidates: [{
+      content: {
+        parts: [{
+          text: JSON.stringify({
+            course: 'Controlli automatici',
+            subject: 'controlli automatici',
+            date: '2025-10-31',
+            summary: 'Due argomenti distinti',
+            confidence: 0.92,
+            warnings: [],
+            notes: [
+              {
+                title: 'Funzione di trasferimento',
+                tags: ['controlli'],
+                aliases: ['Transfer function'],
+                summary: 'Definizione e proprietà',
+                extractedText: 'La funzione di trasferimento mette in relazione ingresso e uscita.',
+                markdown: '# Funzione di trasferimento\n\n## Definizione\n\n$G(s)=Y(s)/U(s)$.',
+                links: [{ target: 'Risposta in frequenza', reason: 'Concetto correlato', exists: true }],
+                keyConcepts: ['funzione di trasferimento'],
+                conceptRelations: [],
+                confidence: 0.93,
+                warnings: []
+              },
+              {
+                title: 'Risposta in frequenza',
+                tags: ['controlli'],
+                aliases: [],
+                summary: 'Analisi nel dominio della frequenza',
+                extractedText: 'La risposta in frequenza descrive il comportamento a regime sinusoidale.',
+                markdown: '# Risposta in frequenza\n\n## Definizione\n\n$G(j\\omega)$.',
+                links: [{ target: 'Funzione di trasferimento', reason: 'Concetto correlato', exists: true }],
+                keyConcepts: ['risposta in frequenza'],
+                conceptRelations: [],
+                confidence: 0.9,
+                warnings: []
+              }
+            ]
+          })
+        }]
+      }
+    }]
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  try {
+    const result = await analyzeImages({
+      config: {
+        aiProvider: 'gemini',
+        aiModel: 'gemini-3.6-flash',
+        aiApiKey: 'test-key',
+        aiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+        aiJsonMode: true,
+        aiFallbackEnabled: false,
+        aiFallbackProvider: 'gemini',
+        aiFallbackModel: '',
+        aiFallbackMinConfidence: 0.7,
+        aiFallbackOnIllegible: true,
+        aiFallbackMinCharsPerImage: 10
+      },
+      files: [{ absolutePath: imagePath, mimeType: 'image/png', originalName: 'appunti.png' }],
+      metadata: { course: 'Controlli automatici', date: '2025-10-31', title: '', tags: [], userNotes: '', files: [] },
+      vaultNotes: []
+    });
+    assert.equal(result.notes.length, 2);
+    assert.equal(result.notes[0].title, 'Funzione di trasferimento');
+    assert.equal(result.notes[1].title, 'Risposta in frequenza');
+    assert.equal(result.noteCount, 2);
+  } finally {
+    global.fetch = originalFetch;
+    rmSync(root, { recursive: true, force: true });
+  }
+});

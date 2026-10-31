@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { mkdirSync, rmSync } from 'node:fs';
 import { newId, nowIso, isPathInside, uniqueStrings, parseJsonSafe } from './utils.js';
-import { saveNoteToVault, vaultIsWritable } from './vault.js';
+import { saveNotesToVault, vaultIsWritable } from './vault.js';
 import { createWebdavHandler } from './webdav.js';
 import { analyzeVaultStructure, matchSubject, rebuildAllVaultArtifacts, suggestedSubjectPath } from './vault-analysis.js';
 
@@ -40,6 +40,8 @@ function jobSummary(job) {
     confidence: job.confidence,
     error: job.error,
     vault_path: job.vault_path,
+    vault_paths: job.vault_paths_json || [],
+    note_count: job.result_json?.noteCount || (job.result_json?.notes?.length || 1),
     created_at: job.created_at,
     updated_at: job.updated_at,
     processed_at: job.processed_at,
@@ -53,6 +55,8 @@ function publicJob(job, baseUrl = '') {
   return {
     ...job,
     result_json: job.result_json,
+    vault_paths: job.vault_paths_json || [],
+    note_count: job.result_json?.noteCount || (job.result_json?.notes?.length || 1),
     files: (job.source_files || []).map((file, index) => ({
       originalName: file.originalName,
       mimeType: file.mimeType,
@@ -223,10 +227,38 @@ export function createApp({ config, store, worker }) {
   app.put('/api/jobs/:id/markdown', requireAuth, (req, res) => {
     const job = store.getJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Job non trovato.' });
+    if (Array.isArray(req.body?.notes)) {
+      const result = job.result_json && typeof job.result_json === 'object' ? { ...job.result_json } : null;
+      if (!result || !Array.isArray(result.notes)) {
+        return res.status(400).json({ error: 'Questo job non contiene più note modificabili.' });
+      }
+      const incoming = req.body.notes;
+      if (incoming.length !== result.notes.length) {
+        return res.status(400).json({ error: 'Numero di note non valido.' });
+      }
+      result.notes = result.notes.map((note, index) => {
+        const markdown = String(incoming[index]?.markdown || '');
+        if (!markdown.trim()) throw new Error(`Il Markdown della nota ${index + 1} è vuoto.`);
+        if (markdown.length > 2_000_000) throw new Error(`Il Markdown della nota ${index + 1} è troppo grande.`);
+        return { ...note, markdown };
+      });
+      const updated = store.updateJob(job.id, {
+        markdown: result.notes[0]?.markdown || '',
+        result_json: result
+      });
+      return res.json({ job: publicJob(updated) });
+    }
     const markdown = String(req.body?.markdown || '');
     if (!markdown.trim()) return res.status(400).json({ error: 'Il Markdown non può essere vuoto.' });
     if (markdown.length > 2_000_000) return res.status(413).json({ error: 'Markdown troppo grande.' });
-    const updated = store.updateJob(job.id, { markdown });
+    const updates = { markdown };
+    if (job.result_json?.notes?.length === 1) {
+      updates.result_json = {
+        ...job.result_json,
+        notes: [{ ...job.result_json.notes[0], markdown }]
+      };
+    }
+    const updated = store.updateJob(job.id, updates);
     res.json({ job: publicJob(updated) });
   });
 
@@ -238,6 +270,7 @@ export function createApp({ config, store, worker }) {
       status: 'uploaded',
       error: null,
       vault_path: null,
+      vault_paths_json: [],
       extracted_text: null,
       markdown: null,
       result_json: null,
@@ -253,14 +286,16 @@ export function createApp({ config, store, worker }) {
   app.post('/api/jobs/:id/save-to-vault', requireAuth, (req, res) => {
     const job = store.getJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Job non trovato.' });
-    if (job.status !== 'completed' || !job.markdown) {
+    if (job.status !== 'completed') {
       return res.status(409).json({ error: 'La nota non è ancora pronta per il salvataggio.' });
     }
-    if (job.vault_path) {
-      return res.status(409).json({ error: 'Questa nota è già stata salvata nel vault.', vaultPath: job.vault_path });
+    if (job.vault_path || (job.vault_paths_json || []).length > 0) {
+      return res.status(409).json({ error: 'Queste note sono già state salvate nel vault.', vaultPath: job.vault_path, vaultPaths: job.vault_paths_json || [] });
     }
 
-    const title = job.result_json?.title || job.requested_title || 'Appunti senza titolo';
+    const resultNotes = Array.isArray(job.result_json?.notes) && job.result_json.notes.length
+      ? job.result_json.notes
+      : [{ title: job.result_json?.title || job.requested_title || 'Appunti senza titolo', markdown: job.markdown }];
     try {
       const analysis = analyzeVaultStructure(config.vaultPath, { subjectRoots: config.obsidianSubjectRoots });
       const subject = matchSubject(job.course, analysis.subjects)
@@ -273,23 +308,26 @@ export function createApp({ config, store, worker }) {
           course: job.course,
           config
         });
-      const saved = saveNoteToVault({
+      const saved = saveNotesToVault({
         vaultPath: config.vaultPath,
         notesSubdir: config.notesSubdir,
         relativeDir: destinationSubjectPath,
-        title,
-        date: job.lesson_date,
-        markdown: job.markdown,
+        notes: resultNotes.map((note, index) => ({
+          title: note.title,
+          date: job.lesson_date,
+          markdown: resultNotes.length === 1 && job.markdown ? job.markdown : note.markdown
+        })),
         jobId: job.id,
         store,
         idGenerator: newId,
         subjectRoots: config.obsidianSubjectRoots
       });
       const updated = store.updateJob(job.id, {
-        vault_path: saved.relativePath,
+        vault_path: saved[0]?.relativePath || null,
+        vault_paths_json: saved.map((item) => item.relativePath),
         warnings_json: uniqueStrings([...(job.warnings_json || []), ...(req.body?.warnings || [])])
       });
-      res.status(201).json({ ok: true, vaultPath: saved.relativePath, job: publicJob(updated) });
+      res.status(201).json({ ok: true, vaultPath: saved[0]?.relativePath || null, vaultPaths: saved.map((item) => item.relativePath), job: publicJob(updated) });
     } catch (error) {
       res.status(500).json({ error: `Salvataggio nel vault fallito: ${error.message}` });
     }

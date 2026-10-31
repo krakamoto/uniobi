@@ -199,7 +199,7 @@ export function safeVaultDestination({ vaultPath, notesSubdir, relativeDir, titl
   return candidate;
 }
 
-export function saveNoteToVault({ vaultPath, notesSubdir, relativeDir, title, date, markdown, jobId, store, idGenerator, subjectRoots = [] }) {
+function writeSingleNote({ vaultPath, notesSubdir, relativeDir, title, date, markdown, jobId, store, idGenerator }) {
   const destination = safeVaultDestination({ vaultPath, notesSubdir, relativeDir, title, date });
   const temp = `${destination}.tmp-${process.pid}-${Date.now()}`;
   writeFileSync(temp, markdown, 'utf8');
@@ -216,14 +216,48 @@ export function saveNoteToVault({ vaultPath, notesSubdir, relativeDir, title, da
     });
   }
 
+  return { title, absolutePath: destination, relativePath };
+}
+
+function rebuildAfterSave(vaultPath, saved, subjectRoots) {
+  const last = saved[saved.length - 1];
+  if (!last) return;
   try {
-    const artifacts = rebuildArtifactsForFile(vaultPath, destination, { subjectRoots });
+    const artifacts = rebuildArtifactsForFile(vaultPath, last.absolutePath, { subjectRoots });
     if (artifacts) console.log(`[vault] Indice aggiornato per ${artifacts.subject}`);
   } catch (error) {
     console.error(`[vault] Impossibile aggiornare l'indice: ${error.message}`);
   }
+}
 
-  return { absolutePath: destination, relativePath };
+export function saveNotesToVault({ vaultPath, notesSubdir, relativeDir, notes, jobId, store, idGenerator, subjectRoots = [] }) {
+  const saved = (notes || []).map((note) => writeSingleNote({
+    vaultPath,
+    notesSubdir,
+    relativeDir,
+    title: note.title,
+    date: note.date,
+    markdown: note.markdown,
+    jobId,
+    store,
+    idGenerator
+  }));
+  rebuildAfterSave(vaultPath, saved, subjectRoots);
+  return saved;
+}
+
+export function saveNoteToVault({ vaultPath, notesSubdir, relativeDir, title, date, markdown, jobId, store, idGenerator, subjectRoots = [] }) {
+  const saved = saveNotesToVault({
+    vaultPath,
+    notesSubdir,
+    relativeDir,
+    notes: [{ title, date, markdown }],
+    jobId,
+    store,
+    idGenerator,
+    subjectRoots
+  });
+  return saved[0];
 }
 
 export function vaultIsWritable(vaultPath, notesSubdir) {

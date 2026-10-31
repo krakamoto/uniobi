@@ -10,7 +10,7 @@ import {
   rebuildAllVaultArtifacts,
   rebuildArtifactsForFile
 } from '../src/vault-analysis.js';
-import { safeVaultDestination, saveNoteToVault } from '../src/vault.js';
+import { safeVaultDestination, saveNoteToVault, saveNotesToVault } from '../src/vault.js';
 import { validateLatexDelimiters } from '../src/markdown.js';
 
 test('analisi del vault: riconosce materie e genera gli indici', () => {
@@ -114,6 +114,34 @@ test('le note usano numerazione progressiva 001, 002 senza data', () => {
     const text = readFileSync(path.join(subjectDir, '_Indice.md'), 'utf8');
     assert.match(text, /001 Prima nota/);
     assert.match(text, /002 Seconda nota/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test('un job può salvare più note numerate e aggiornare un solo indice', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-multi-save-'));
+  const subjectDir = path.join(root, 'uni', 'Uni', 'magistrale', 'controlli');
+  mkdirSync(subjectDir, { recursive: true });
+  try {
+    const saved = saveNotesToVault({
+      vaultPath: root,
+      notesSubdir: 'Università/Lezioni',
+      relativeDir: 'uni/Uni/magistrale/controlli',
+      notes: [
+        { title: 'Funzione di trasferimento', date: '2025-10-31', markdown: '# Funzione di trasferimento\n' },
+        { title: 'Risposta in frequenza', date: '2025-10-31', markdown: '# Risposta in frequenza\n' }
+      ],
+      subjectRoots: ['uni/Uni/magistrale']
+    });
+    assert.equal(saved.length, 2);
+    assert.match(path.basename(saved[0].relativePath), /^001 Funzione di trasferimento\.md$/);
+    assert.match(path.basename(saved[1].relativePath), /^002 Risposta in frequenza\.md$/);
+    const index = readFileSync(path.join(subjectDir, '_Indice.md'), 'utf8');
+    assert.match(index, /001 Funzione di trasferimento/);
+    assert.match(index, /002 Risposta in frequenza/);
+    assert.equal(existsSync(path.join(subjectDir, '_Mappa concettuale.md')), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -713,7 +713,10 @@ public class MainActivity extends Activity {
 
             String course = job.optString("course", "");
             String date = job.optString("lesson_date", "");
-            String meta = (course.isEmpty() ? "Corso non indicato" : course) + (date.isEmpty() ? "" : " · " + date);
+            int noteCount = job.optInt("note_count", 1);
+            String meta = (course.isEmpty() ? "Corso non indicato" : course)
+                + (date.isEmpty() ? "" : " · " + date)
+                + (noteCount > 1 ? " · " + noteCount + " note" : "");
             row.addView(text(meta, 12, MUTED, Typeface.NORMAL), matchTop(dp(5)));
             String error = job.optString("error", "");
             if (!error.isEmpty()) row.addView(text(error, 12, DANGER, Typeface.NORMAL), matchTop(dp(5)));
@@ -750,7 +753,12 @@ public class MainActivity extends Activity {
     private void showJobDialog(JSONObject job) {
         String id = job.optString("id", "");
         String status = job.optString("status", "");
-        String title = firstNonEmpty(job.optString("requested_title"), job.optString("course"), "Dettaglio elaborazione");
+        JSONObject resultJson = job.optJSONObject("result_json");
+        JSONArray generatedNotes = resultJson == null ? null : resultJson.optJSONArray("notes");
+        boolean multiNote = generatedNotes != null && generatedNotes.length() > 1;
+        String title = resultJson == null
+            ? firstNonEmpty(job.optString("requested_title"), job.optString("course"), "Dettaglio elaborazione")
+            : resultJson.optString("title", firstNonEmpty(job.optString("requested_title"), job.optString("course"), "Dettaglio elaborazione"));
 
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -795,9 +803,28 @@ public class MainActivity extends Activity {
             content.addView(text(linkText.toString().trim(), 13, PRIMARY_DARK, Typeface.NORMAL), matchTop(dp(10)));
         }
 
+        if (multiNote) {
+            content.addView(text(generatedNotes.length() + " note separate", 15, TEXT, Typeface.BOLD), matchTop(dp(14)));
+            content.addView(text("Il gruppo di immagini è stato diviso per argomenti. Tutte le note verranno salvate nel vault.", 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+            for (int i = 0; i < generatedNotes.length(); i++) {
+                JSONObject note = generatedNotes.optJSONObject(i);
+                if (note == null) continue;
+                content.addView(text((i + 1) + ". " + note.optString("title", "Nota"), 14, TEXT, Typeface.BOLD), matchTop(dp(10)));
+                String summary = note.optString("summary", "");
+                if (!summary.isEmpty()) content.addView(text(summary, 12, MUTED, Typeface.NORMAL), matchTop(dp(3)));
+                String noteMarkdown = note.optString("markdown", "");
+                if (!noteMarkdown.isEmpty()) {
+                    TextView preview = text(simpleMarkdownPreview(noteMarkdown), 12, TEXT, Typeface.NORMAL);
+                    preview.setBackgroundColor(Color.WHITE);
+                    preview.setPadding(dp(10), dp(8), dp(10), dp(8));
+                    content.addView(preview, matchTop(dp(6)));
+                }
+            }
+        }
+
         String markdown = job.optString("markdown", "");
         EditText editor = null;
-        if (!markdown.isEmpty()) {
+        if (!multiNote && !markdown.isEmpty()) {
             content.addView(text("Markdown modificabile", 13, TEXT, Typeface.BOLD), matchTop(dp(14)));
             editor = new EditText(this);
             editor.setText(markdown);
@@ -830,7 +857,9 @@ public class MainActivity extends Activity {
             builder.setPositiveButton("Riprova", (dialog, which) -> retryJob(id));
         } else if ("completed".equals(status)) {
             builder.setPositiveButton("Salva nel vault", (dialog, which) -> saveJobToVault(id, editorFinal));
-            builder.setNeutralButton("Salva modifiche", (dialog, which) -> saveMarkdown(id, editorFinal));
+            if (!multiNote && editorFinal != null) {
+                builder.setNeutralButton("Salva modifiche", (dialog, which) -> saveMarkdown(id, editorFinal));
+            }
         }
 
         builder.show();
@@ -863,9 +892,12 @@ public class MainActivity extends Activity {
                 ApiResponse response = api.postJson("/api/jobs/" + jobId + "/save-to-vault", "{}");
                 if (!response.isOk()) throw new IOException(response.errorMessage());
                 JSONObject payload = new JSONObject(response.body);
-                String vaultPath = payload.optString("vaultPath", "");
+                JSONArray vaultPaths = payload.optJSONArray("vaultPaths");
+                String message = vaultPaths != null && vaultPaths.length() > 1
+                    ? vaultPaths.length() + " note salvate nel vault."
+                    : "Nota salvata: " + payload.optString("vaultPath", "");
                 runOnUiThread(() -> {
-                    toast("Nota salvata: " + vaultPath);
+                    toast(message);
                     loadJobs(true);
                 });
             } catch (Exception error) {

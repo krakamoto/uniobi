@@ -2,7 +2,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { analyzeImages } from './ai/index.js';
 import { buildFinalMarkdown } from './markdown.js';
-import { selectWikilinks, saveNoteToVault } from './vault.js';
+import { selectWikilinks, saveNotesToVault } from './vault.js';
 import { analyzeVaultStructure, matchSubject, suggestedSubjectPath } from './vault-analysis.js';
 import { newId, nowIso, uniqueStrings } from './utils.js';
 
@@ -70,7 +70,6 @@ export function createWorker({ config, store }) {
         matchedSubject
       });
 
-      const finalTitle = aiResult.title || job.requested_title || `Appunti ${job.course || ''} ${job.lesson_date || ''}`.trim() || 'Appunti senza titolo';
       const resolvedSubject = matchedSubject || matchSubject(aiResult.subject, vaultAnalysis.subjects);
       const newSubjectPath = suggestedSubjectPath({
         subjectName: aiResult.subject || job.course,
@@ -78,48 +77,99 @@ export function createWorker({ config, store }) {
         config
       });
       const destinationSubjectPath = resolvedSubject?.relativePath || newSubjectPath;
-      const links = selectWikilinks({
-        aiLinks: aiResult.links,
-        markdown: aiResult.markdown,
-        course: job.course || aiResult.course,
-        title: finalTitle,
-        notes: vaultNotes,
-        allowCreate: config.allowCreateMissingWikilinks
-      });
+      const baseCourse = job.course || aiResult.course || '';
+      const baseDate = job.lesson_date || aiResult.date || '';
+      const baseSubject = resolvedSubject?.name || aiResult.subject || baseCourse;
+      const aiNotes = Array.isArray(aiResult.notes) && aiResult.notes.length ? aiResult.notes : [aiResult];
+
+      // Le note dello stesso gruppo possono collegarsi tra loro prima di essere salvate.
+      const batchTargets = aiNotes.map((note, index) => ({
+        title: note.title || `Nota ${index + 1}`,
+        aliases: uniqueStrings([note.title, ...(note.aliases || [])]),
+        tags: note.tags || [],
+        relativePath: `__nuove_note__/${index}`
+      }));
+      const allLinkTargets = [...vaultNotes, ...batchTargets];
 
       const createdAt = nowIso();
-      const markdown = buildFinalMarkdown({
-        aiResult,
-        metadata: {
-          title: finalTitle,
-          course: job.course || aiResult.course,
-          subject: resolvedSubject?.name || aiResult.subject,
-          date: job.lesson_date || aiResult.date,
-          tags: uniqueStrings([...(job.user_tags || []), ...aiResult.tags]),
-          fallbackContent: aiResult.extractedText
-        },
-        links,
-        warnings: [],
-        createdAt,
-        notes: vaultNotes,
-        allowCreate: config.allowCreateMissingWikilinks
+      const preparedNotes = aiNotes.map((note, index) => {
+        const title = note.title || (aiNotes.length === 1
+          ? (job.requested_title || `Appunti ${baseCourse} ${baseDate}`.trim() || 'Appunti senza titolo')
+          : `Nota ${index + 1}`);
+        const links = selectWikilinks({
+          aiLinks: note.links || [],
+          markdown: note.markdown || '',
+          course: baseCourse,
+          title,
+          notes: allLinkTargets,
+          allowCreate: config.allowCreateMissingWikilinks
+        });
+        const noteTags = uniqueStrings([...(job.user_tags || []), ...(note.tags || [])]);
+        const markdown = buildFinalMarkdown({
+          aiResult: {
+            ...note,
+            title,
+            aliases: uniqueStrings([title, ...(note.aliases || [])])
+          },
+          metadata: {
+            title,
+            course: baseCourse,
+            subject: baseSubject,
+            date: baseDate,
+            tags: noteTags,
+            fallbackContent: note.extractedText
+          },
+          links,
+          warnings: [],
+          createdAt,
+          notes: allLinkTargets,
+          allowCreate: config.allowCreateMissingWikilinks
+        });
+        return {
+          title,
+          summary: note.summary || '',
+          tags: noteTags,
+          aliases: uniqueStrings([title, ...(note.aliases || [])]),
+          keyConcepts: note.keyConcepts || [],
+          conceptRelations: note.conceptRelations || [],
+          confidence: note.confidence,
+          warnings: note.warnings || [],
+          links,
+          extractedText: note.extractedText || '',
+          markdown
+        };
       });
 
+      const uniqueLinks = [];
+      const seenLinks = new Set();
+      for (const note of preparedNotes) {
+        for (const link of note.links) {
+          const key = String(link.target || '').toLocaleLowerCase('it');
+          if (!key || seenLinks.has(key)) continue;
+          seenLinks.add(key);
+          uniqueLinks.push(link);
+        }
+      }
+      const combinedWarnings = uniqueStrings([...(aiResult.warnings || []), ...preparedNotes.flatMap((note) => note.warnings)]);
       const resultJson = {
-        title: finalTitle,
-        course: job.course || aiResult.course || '',
-        subject: resolvedSubject?.name || aiResult.subject || job.course || '',
+        title: preparedNotes.length === 1
+          ? preparedNotes[0].title
+          : `${preparedNotes.length} note — ${baseCourse || baseSubject || 'appunti'}`,
+        noteCount: preparedNotes.length,
+        notes: preparedNotes,
+        course: baseCourse,
+        subject: baseSubject,
         subjectPath: destinationSubjectPath,
         subjectIsNew: !resolvedSubject,
-        date: job.lesson_date || aiResult.date || '',
-        tags: uniqueStrings([...(job.user_tags || []), ...aiResult.tags]),
-        aliases: aiResult.aliases,
+        date: baseDate,
+        tags: uniqueStrings(preparedNotes.flatMap((note) => note.tags)),
+        aliases: uniqueStrings(preparedNotes.flatMap((note) => note.aliases)),
         summary: aiResult.summary,
-        keyConcepts: aiResult.keyConcepts,
-        conceptRelations: aiResult.conceptRelations,
+        keyConcepts: uniqueStrings(preparedNotes.flatMap((note) => note.keyConcepts)),
+        conceptRelations: preparedNotes.flatMap((note) => note.conceptRelations),
         confidence: aiResult.confidence,
-        warnings: aiResult.warnings,
-        links,
+        warnings: combinedWarnings,
+        links: uniqueLinks,
         ai: {
           primaryModel: aiResult.primaryModel || aiResult.modelUsed || config.aiModel,
           modelUsed: aiResult.modelUsed || config.aiModel,
@@ -131,30 +181,35 @@ export function createWorker({ config, store }) {
 
       store.updateJob(jobId, {
         status: 'completed',
-        extracted_text: aiResult.extractedText || aiResult.markdown,
-        markdown,
+        extracted_text: preparedNotes.map((note) => note.extractedText).filter(Boolean).join('\n\n'),
+        markdown: preparedNotes[0]?.markdown || '',
         result_json: resultJson,
-        links_json: links,
-        warnings_json: aiResult.warnings,
+        links_json: uniqueLinks,
+        warnings_json: combinedWarnings,
         confidence: aiResult.confidence,
         error: null,
         processed_at: nowIso()
       });
 
       if (config.autoSaveToVault) {
-        const saved = saveNoteToVault({
+        const saved = saveNotesToVault({
           vaultPath: config.vaultPath,
           notesSubdir: config.notesSubdir,
           relativeDir: destinationSubjectPath,
-          title: finalTitle,
-          date: job.lesson_date,
-          markdown,
+          notes: preparedNotes.map((note) => ({
+            title: note.title,
+            date: baseDate,
+            markdown: note.markdown
+          })),
           jobId,
           store,
           idGenerator: newId,
           subjectRoots: config.obsidianSubjectRoots
         });
-        store.updateJob(jobId, { vault_path: saved.relativePath });
+        store.updateJob(jobId, {
+          vault_path: saved[0]?.relativePath || null,
+          vault_paths_json: saved.map((item) => item.relativePath)
+        });
       }
       return store.getJob(jobId);
     } catch (error) {

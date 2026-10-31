@@ -39,12 +39,12 @@ export function parseAiJson(text) {
   throw new Error('Il provider AI non ha restituito un JSON valido.');
 }
 
-export function normalizeAiResult(raw, fallback = {}) {
-  const result = raw && typeof raw === 'object' ? raw : {};
-  const title = String(result.title || fallback.title || 'Appunti senza titolo').trim();
-  const markdown = String(result.markdown || result.content || fallback.markdown || `# ${title}\n\n${fallback.extractedText || ''}`).trim();
-  const links = Array.isArray(result.links)
-    ? result.links.map((link) => {
+function normalizeSingleNote(result, fallback = {}) {
+  const raw = result && typeof result === 'object' ? result : {};
+  const title = String(raw.title || fallback.title || 'Appunti senza titolo').trim();
+  const markdown = String(raw.markdown || raw.content || fallback.markdown || `# ${title}\n\n${fallback.extractedText || ''}`).trim();
+  const links = Array.isArray(raw.links)
+    ? raw.links.map((link) => {
         if (typeof link === 'string') return { target: link, reason: '', exists: false };
         return {
           target: String(link?.target || link?.note || '').trim(),
@@ -53,8 +53,8 @@ export function normalizeAiResult(raw, fallback = {}) {
         };
       }).filter((link) => link.target)
     : [];
-  const conceptRelations = Array.isArray(result.conceptRelations)
-    ? result.conceptRelations.map((relation) => ({
+  const conceptRelations = Array.isArray(raw.conceptRelations)
+    ? raw.conceptRelations.map((relation) => ({
         from: String(relation?.from || '').trim(),
         to: String(relation?.to || '').trim(),
         label: String(relation?.label || '').trim()
@@ -62,20 +62,65 @@ export function normalizeAiResult(raw, fallback = {}) {
     : [];
   return {
     title,
-    course: String(result.course || fallback.course || '').trim(),
-    subject: String(result.subject || '').trim(),
-    subjectPath: String(result.subjectPath || result.subject_path || '').trim(),
-    date: String(result.date || fallback.date || '').trim(),
-    tags: uniqueStrings(Array.isArray(result.tags) ? result.tags : []),
-    aliases: uniqueStrings(Array.isArray(result.aliases) ? result.aliases : []),
-    summary: String(result.summary || '').trim(),
-    extractedText: String(result.extractedText || result.extracted_text || '').trim(),
-    keyConcepts: uniqueStrings(Array.isArray(result.keyConcepts) ? result.keyConcepts : []),
+    course: String(raw.course || fallback.course || '').trim(),
+    subject: String(raw.subject || fallback.subject || '').trim(),
+    subjectPath: String(raw.subjectPath || raw.subject_path || fallback.subjectPath || '').trim(),
+    date: String(raw.date || fallback.date || '').trim(),
+    tags: uniqueStrings(Array.isArray(raw.tags) ? raw.tags : []),
+    aliases: uniqueStrings(Array.isArray(raw.aliases) ? raw.aliases : []),
+    summary: String(raw.summary || '').trim(),
+    extractedText: String(raw.extractedText || raw.extracted_text || '').trim(),
+    keyConcepts: uniqueStrings(Array.isArray(raw.keyConcepts) ? raw.keyConcepts : []),
     conceptRelations,
     markdown,
     links,
-    confidence: Number.isFinite(Number(result.confidence)) ? Math.max(0, Math.min(1, Number(result.confidence))) : 0.5,
-    warnings: uniqueStrings(Array.isArray(result.warnings) ? result.warnings : [])
+    confidence: Number.isFinite(Number(raw.confidence)) ? Math.max(0, Math.min(1, Number(raw.confidence))) : 0.5,
+    warnings: uniqueStrings(Array.isArray(raw.warnings) ? raw.warnings : [])
+  };
+}
+
+export function normalizeAiResult(raw, fallback = {}) {
+  const result = raw && typeof raw === 'object' ? raw : {};
+  const rawNotes = Array.isArray(result.notes) && result.notes.length > 0
+    ? result.notes
+    : [result];
+  const notes = rawNotes.map((note, index) => normalizeSingleNote(note, {
+    title: fallback.title,
+    course: result.course || fallback.course,
+    subject: result.subject || fallback.subject,
+    subjectPath: result.subjectPath || result.subject_path || fallback.subjectPath,
+    date: result.date || fallback.date,
+    markdown: index === 0 ? fallback.markdown : '',
+    extractedText: index === 0 ? fallback.extractedText : ''
+  }));
+
+  const warnings = uniqueStrings([
+    ...(Array.isArray(result.warnings) ? result.warnings : []),
+    ...notes.flatMap((note) => note.warnings)
+  ]);
+  const confidenceValues = notes.map((note) => note.confidence).filter(Number.isFinite);
+  const overallConfidence = Number.isFinite(Number(result.confidence))
+    ? Math.max(0, Math.min(1, Number(result.confidence)))
+    : (confidenceValues.length ? confidenceValues.reduce((total, value) => total + value, 0) / confidenceValues.length : 0.5);
+
+  return {
+    notes,
+    noteCount: notes.length,
+    title: notes[0].title,
+    course: String(result.course || notes[0].course || fallback.course || '').trim(),
+    subject: String(result.subject || notes[0].subject || fallback.subject || '').trim(),
+    subjectPath: String(result.subjectPath || result.subject_path || notes[0].subjectPath || fallback.subjectPath || '').trim(),
+    date: String(result.date || notes[0].date || fallback.date || '').trim(),
+    tags: uniqueStrings(notes.flatMap((note) => note.tags)),
+    aliases: uniqueStrings(notes.flatMap((note) => note.aliases)),
+    summary: String(result.summary || notes[0].summary || '').trim(),
+    extractedText: notes.map((note) => note.extractedText).filter(Boolean).join('\n\n'),
+    keyConcepts: uniqueStrings(notes.flatMap((note) => note.keyConcepts)),
+    conceptRelations: notes.flatMap((note) => note.conceptRelations),
+    markdown: notes[0].markdown,
+    links: notes.flatMap((note) => note.links),
+    confidence: overallConfidence,
+    warnings
   };
 }
 
@@ -101,13 +146,20 @@ export function shouldUseAdvancedFallback(result, files, config) {
     return { needed: false, reason: '' };
   }
   const reasons = [];
-  const markdown = String(result?.markdown || '').trim();
-  const extractedText = String(result?.extractedText || '').trim();
-  const confidence = Number(result?.confidence);
-  const warnings = (result?.warnings || []).join(' ').toLocaleLowerCase('it');
+  const notes = Array.isArray(result?.notes) && result.notes.length ? result.notes : [result || {}];
+  const markdownLength = notes.reduce((total, note) => total + String(note.markdown || '').trim().length, 0);
+  const extractedText = notes.map((note) => String(note.extractedText || '').trim()).join(' ').trim();
+  const noteConfidences = notes.map((note) => Number(note.confidence)).filter(Number.isFinite);
+  const confidence = Number.isFinite(Number(result?.confidence))
+    ? Number(result.confidence)
+    : (noteConfidences.length ? Math.min(...noteConfidences) : 0.5);
+  const warnings = [
+    ...(result?.warnings || []),
+    ...notes.flatMap((note) => note.warnings || [])
+  ].join(' ').toLocaleLowerCase('it');
 
-  if (markdown.length < 120) reasons.push('Markdown troppo corto o incompleto');
-  if (Number.isFinite(confidence) && confidence < config.aiFallbackMinConfidence) {
+  if (markdownLength < 120) reasons.push('Markdown troppo corto o incompleto');
+  if (confidence < config.aiFallbackMinConfidence) {
     reasons.push(`confidenza ${confidence.toFixed(2)} < soglia ${config.aiFallbackMinConfidence}`);
   }
   if (config.aiFallbackOnIllegible && /(illeggibil|non leggibil|poco leggibil|incert|dubbio|bassa qualit)/.test(warnings)) {
@@ -153,25 +205,34 @@ Regole precise basate sul vault reale:
 4. Usa un titolo descrittivo in italiano, senza data e senza prefisso numerico. Deve descrivere il concetto, non la lezione in generale.
 5. Classifica la nota nella materia esistente più pertinente. Se nessuna materia è pertinente, proponi un nome di materia breve e stabile.
 6. Inserisci wikilink [[Titolo nota]] solo verso titoli presenti nell'elenco delle note esistenti. Non inventare wikilink.
-7. Estrai 3-10 concetti chiave atomici e alcune relazioni concettuali tra loro. Usa termini coerenti con la terminologia delle note esistenti.
-8. Non includere frontmatter YAML: il backend lo genera. Il campo markdown deve contenere solo il corpo della nota.
-9. Restituisci ESCLUSIVAMENTE un oggetto JSON valido, senza testo fuori dal JSON, con questa forma:
+7. Valuta se le immagini contengono argomenti chiaramente distinti. Se sì, dividi il materiale in note atomiche separate, una per argomento, con un massimo di 6 note. Se le immagini sono pagine consecutive dello stesso argomento, genera una sola nota.
+8. Ogni nota deve essere autonoma: titolo specifico, riassunto, contenuto completo, concetti chiave, tag e collegamenti. Inserisci wikilink tra le nuove note quando sono correlate, usando il titolo della nota come target.
+9. Estrai 3-10 concetti chiave atomici e alcune relazioni concettuali per ogni nota. Usa termini coerenti con la terminologia delle note esistenti.
+10. Non includere frontmatter YAML: il backend lo genera. Il campo markdown deve contenere solo il corpo della nota.
+11. Restituisci ESCLUSIVAMENTE un oggetto JSON valido, senza testo fuori dal JSON, con questa forma:
 {
-  "title": "Titolo sintetico del concetto",
   "course": "Nome corso indicato o dedotto",
   "subject": "Materia esistente o proposta",
   "subjectPath": "Percorso relativo della materia esistente, se nota",
   "date": "YYYY-MM-DD",
-  "tags": ["lezione", "argomento"],
-  "aliases": ["Sinonimo o variante terminologica"],
-  "summary": "Breve riassunto",
-  "extractedText": "Trascrizione testuale completa degli appunti",
-  "keyConcepts": ["concetto 1", "concetto 2"],
-  "conceptRelations": [{"from": "concetto 1", "to": "concetto 2", "label": "relazione"}],
-  "markdown": "# Titolo\\n\\n## Contenuto\\n...",
-  "links": [{"target": "Titolo nota esistente", "reason": "Motivo", "exists": true}],
+  "summary": "Riassunto complessivo del gruppo di immagini",
   "confidence": 0.0,
-  "warnings": ["Eventuali dubbi o parti illeggibili"]
+  "warnings": ["Eventuali dubbi complessivi"],
+  "notes": [
+    {
+      "title": "Titolo sintetico del primo argomento",
+      "tags": ["lezione", "argomento"],
+      "aliases": ["Sinonimo o variante terminologica"],
+      "summary": "Breve riassunto della singola nota",
+      "extractedText": "Trascrizione testuale della porzione di appunti relativa a questa nota",
+      "keyConcepts": ["concetto 1", "concetto 2"],
+      "conceptRelations": [{"from": "concetto 1", "to": "concetto 2", "label": "relazione"}],
+      "markdown": "# Titolo\\n\\n## Contenuto\\n...",
+      "links": [{"target": "Titolo di un'altra nota del gruppo o nota esistente", "reason": "Motivo", "exists": true}],
+      "confidence": 0.0,
+      "warnings": []
+    }
+  ]
 }`;
 
   let primary = null;
