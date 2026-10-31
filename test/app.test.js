@@ -10,6 +10,7 @@ import { createApp } from '../src/app.js';
 import { selectWikilinks, scanVault } from '../src/vault.js';
 import { geminiAnalyze } from '../src/ai/gemini.js';
 import { sanitizeFilename, isPathInside } from '../src/utils.js';
+import { buildFinalMarkdown, validateLatexDelimiters } from '../src/markdown.js';
 
 const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -238,4 +239,33 @@ test('provider Gemini invia le immagini inline e valida la risposta JSON', async
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+
+test('il LaTeX non delimitato viene segnalato e correttamente formattato', () => {
+  const invalid = validateLatexDelimiters('# Test\n\n\\frac{a}{b} senza delimitatori.');
+  assert.equal(invalid.valid, false);
+  assert.ok(invalid.warnings.length > 0);
+
+  const valid = validateLatexDelimiters('# Test\n\n$\\frac{a}{b}$ e $$\\int_0^1 x\\,dx$$');
+  assert.equal(valid.valid, true);
+
+  const markdown = buildFinalMarkdown({
+    aiResult: {
+      title: 'Formula',
+      markdown: '# Formula\n\nLa formula è \\frac{a}{b}.',
+      tags: [],
+      aliases: [],
+      warnings: [],
+      keyConcepts: [],
+      conceptRelations: []
+    },
+    metadata: { title: 'Formula', course: 'Matematica', date: '2025-10-31', tags: [] },
+    links: [],
+    warnings: [],
+    createdAt: '2025-10-31T10:00:00.000Z',
+    notes: [],
+    allowCreate: false
+  });
+  assert.match(markdown, /LaTeX non racchiuso/);
 });

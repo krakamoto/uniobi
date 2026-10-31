@@ -106,7 +106,8 @@ ${existingTitles.length ? existingTitles.map((title) => `- ${title}`).join('\n')
 Regole precise basate sul vault reale:
 1. Trascrivi fedelmente il contenuto; non inventare informazioni.
 2. Correggi solo refusi evidenti. Segnala le parti illeggibili con "[illeggibile]" e inseriscile in warnings.
-3. Produci Markdown Obsidian valido: H1, sezioni H2/H3, elenchi, formule LaTeX inline $...$ e display $$...$$, callout Obsidian per avvisi e incertezze.
+3. Produci Markdown Obsidian valido: H1, sezioni H2/H3, elenchi, callout Obsidian per avvisi e incertezze.
+3b. Ogni simbolo, variabile o espressione matematica deve essere racchiusa tra $...$ se inline o $$...$$ se display. Non scrivere MAI comandi LaTeX nudi come \frac, \vec, \alpha, \sum: devono sempre trovarsi dentro i delimitatori $ o $$.
 4. Usa un titolo descrittivo in italiano, senza data e senza prefisso numerico. Deve descrivere il concetto, non la lezione in generale.
 5. Classifica la nota nella materia esistente più pertinente. Se nessuna materia è pertinente, proponi un nome di materia breve e stabile.
 6. Inserisci wikilink [[Titolo nota]] solo verso titoli presenti nell'elenco delle note esistenti. Non inventare wikilink.

@@ -79,6 +79,25 @@ export function appendWarnings(markdown, warnings) {
   if (clean.length === 0) return markdown;
   return `${markdown.replace(/\s+$/, '')}\n\n> [!warning] Da verificare\n${clean.map((warning) => `> - ${warning}`).join('\n')}\n`;
 }
+
+export function validateLatexDelimiters(markdown) {
+  let body = stripFrontmatter(markdown);
+  body = body.replace(/```[\s\S]*?```/g, ' ');
+  body = body.replace(/`[^`\n]*`/g, ' ');
+  body = body.replace(/\$\$[\s\S]*?\$\$/g, ' ');
+  body = body.replace(/\$[^$\n]+\$/g, ' ');
+
+  const commandPattern = /\\(?:frac|sqrt|sum|prod|int|iint|iiint|oint|partial|nabla|cdot|times|div|left|right|vec|hat|bar|overline|underline|alpha|beta|gamma|delta|epsilon|varepsilon|theta|lambda|mu|nu|pi|rho|sigma|tau|phi|varphi|omega|infty|text|mathrm|mathbf|mathbb|mathcal|begin|end)\b[^$\n]*/g;
+  const matches = [...body.matchAll(commandPattern)]
+    .map((match) => match[0].trim().slice(0, 100))
+    .filter(Boolean);
+  const snippets = uniqueStrings(matches).slice(0, 8);
+  return {
+    valid: snippets.length === 0,
+    snippets,
+    warnings: snippets.map((snippet) => `LaTeX non racchiuso tra $...$ o $$...$$: \`${snippet}\``)
+  };
+}
 export function appendKeyConcepts(markdown, keyConcepts, conceptRelations) {
   let body = markdown.replace(/\s+$/, '');
   const concepts = uniqueStrings(keyConcepts);
@@ -104,7 +123,8 @@ export function buildFinalMarkdown({ aiResult, metadata, links, warnings, create
   body = sanitized.markdown;
   body = appendKeyConcepts(body, aiResult.keyConcepts || [], aiResult.conceptRelations || []);
   body = appendVerifiedLinks(body, links);
-  body = appendWarnings(body, [...(warnings || []), ...(aiResult.warnings || []), ...sanitized.warnings]);
+  const latexCheck = validateLatexDelimiters(body);
+  body = appendWarnings(body, [...(warnings || []), ...(aiResult.warnings || []), ...sanitized.warnings, ...latexCheck.warnings]);
 
   const frontmatter = buildFrontmatter({
     title,
