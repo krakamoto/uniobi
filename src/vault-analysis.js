@@ -4,6 +4,7 @@ import {
   existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync
 } from 'node:fs';
 import { normalizeTitle, slugify, uniqueStrings } from './utils.js';
+import { validateLatexDelimiters } from './markdown.js';
 
 export const GENERATED_INDEX = '_Indice.md';
 export const GENERATED_MAP = '_Mappa concettuale.md';
@@ -80,6 +81,40 @@ function parseFrontmatter(content) {
   return result;
 }
 
+function safeTruncate(text, maxLength = 220) {
+  let mathDelimiter = '';
+  let mathStart = -1;
+  let safeEnd = 0;
+  let index = 0;
+  for (; index < text.length && index < maxLength; index += 1) {
+    if (!mathDelimiter) {
+      if (text[index] === '$') {
+        mathDelimiter = text[index + 1] === '$' ? '$$' : '$';
+        mathStart = index;
+        if (mathDelimiter === '$$') index += 1;
+      } else {
+        safeEnd = index + 1;
+      }
+      continue;
+    }
+    if (mathDelimiter === '$' && text[index] === '$') {
+      mathDelimiter = '';
+      safeEnd = index + 1;
+      continue;
+    }
+    if (mathDelimiter === '$$' && text[index] === '$' && text[index + 1] === '$') {
+      mathDelimiter = '';
+      index += 1;
+      safeEnd = index + 1;
+    }
+  }
+  if (mathDelimiter) return `${text.slice(0, mathStart).trim()}…`;
+  if (index >= maxLength) {
+    return `${text.slice(0, Math.max(safeEnd, 1)).trim()}…`;
+  }
+  return text;
+}
+
 function plainSummary(content) {
   let text = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
   text = text.replace(/```[\s\S]*?```/g, ' ');
@@ -88,9 +123,16 @@ function plainSummary(content) {
   text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
   text = text.replace(/<[^>]+>/g, ' ');
   text = text.replace(/^#{1,6}\s+/gm, '');
-  text = text.replace(/[*_`>$]/g, '');
+  // Mantiene i delimitatori $...$ e $$...$$: i riassunti devono contenere LaTeX valido.
+  text = text.replace(/[*_`>]/g, '');
   text = text.replace(/\s+/g, ' ').trim();
-  return text.slice(0, 220);
+  let summary = safeTruncate(text, 220);
+  if (!validateLatexDelimiters(summary).valid) {
+    // Le note sorgente possono contenere comandi LaTeX nudi: nel riassunto
+    // dell'indice non li mostriamo fuori dai delimitatori matematici.
+    summary = summary.replace(/\\[A-Za-z]+/g, '').replace(/\s+/g, ' ').trim();
+  }
+  return summary;
 }
 
 function noteMetadata(absolutePath, vaultPath) {
@@ -289,7 +331,7 @@ function indexRowsForNotes(subject) {
       .map((note) => {
         const display = note.title.replace(/\|/g, '—');
         const target = note.relativePath.replace(/\.md$/i, '').replace(/\|/g, '—');
-        const summary = note.summary ? ` — ${note.summary.slice(0, 140)}` : '';
+        const summary = note.summary ? ` — ${note.summary}` : '';
         return `- [[${target}|${display}]]${summary}`;
       });
     sections.push(`### ${label}\n\n${rows.join('\n')}`);

@@ -11,6 +11,7 @@ import {
   rebuildArtifactsForFile
 } from '../src/vault-analysis.js';
 import { saveNoteToVault } from '../src/vault.js';
+import { validateLatexDelimiters } from '../src/markdown.js';
 
 test('analisi del vault: riconosce materie, indici e mappe concettuali', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'uniai-vault-analysis-'));
@@ -65,6 +66,26 @@ test('analisi del vault: riconosce materie, indici e mappe concettuali', () => {
     assert.match(saved.relativePath, /analisi matematica/);
     assert.ok(readFileSync(path.join(subjectDir, '_Indice.md'), 'utf8').includes('Serie numeriche'));
     assert.ok(readFileSync(path.join(subjectDir, '_Mappa concettuale.canvas'), 'utf8').includes('Serie numeriche'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test('gli indici generati non spezzano le formule LaTeX', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-vault-latex-'));
+  const subjectDir = path.join(root, 'uni', 'Uni', 'triennale', 'fisica');
+  mkdirSync(subjectDir, { recursive: true });
+  const longIntro = 'Introduzione molto lunga alla lezione. '.repeat(10);
+  writeFileSync(
+    path.join(subjectDir, '00 formula.md'),
+    `# Formula\n\n${longIntro}\n\n$$\n\\frac{a}{b} = c\n$$\n`
+  );
+  try {
+    rebuildAllVaultArtifacts(root, { subjectRoots: ['uni/Uni/triennale'] });
+    const index = readFileSync(path.join(subjectDir, '_Indice.md'), 'utf8');
+    assert.equal(validateLatexDelimiters(index).valid, true);
+    assert.match(index, /\$\$|…/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
