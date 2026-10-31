@@ -11,3 +11,8 @@ obsidian-vault/*
 .npm-cache/
 *.log
 .DS_Store
+dist/
+*.jks
+*.keystore
+
+public/downloads/
