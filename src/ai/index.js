@@ -79,6 +79,48 @@ export function normalizeAiResult(raw, fallback = {}) {
   };
 }
 
+async function runProvider({ providerConfig, prompt, images, metadata, files, vaultNotes }) {
+  switch (providerConfig.aiProvider) {
+    case 'mock':
+      return normalizeAiResult(await mockAnalyze({ metadata, files, vaultNotes }));
+    case 'openai':
+    case 'openai-compatible':
+    case 'openrouter':
+      return normalizeAiResult(await openAiAnalyze({ config: providerConfig, prompt, images }));
+    case 'gemini':
+      return normalizeAiResult(await geminiAnalyze({ config: providerConfig, prompt, images }));
+    case 'ollama':
+      return normalizeAiResult(await ollamaAnalyze({ config: providerConfig, prompt, images }));
+    default:
+      throw new Error(`Provider AI non supportato: ${providerConfig.aiProvider}. Usa mock, gemini, openai, openai-compatible, openrouter o ollama.`);
+  }
+}
+
+export function shouldUseAdvancedFallback(result, files, config) {
+  if (!config.aiFallbackEnabled || !config.aiFallbackModel || config.aiProvider === 'mock') {
+    return { needed: false, reason: '' };
+  }
+  const reasons = [];
+  const markdown = String(result?.markdown || '').trim();
+  const extractedText = String(result?.extractedText || '').trim();
+  const confidence = Number(result?.confidence);
+  const warnings = (result?.warnings || []).join(' ').toLocaleLowerCase('it');
+
+  if (markdown.length < 120) reasons.push('Markdown troppo corto o incompleto');
+  if (Number.isFinite(confidence) && confidence < config.aiFallbackMinConfidence) {
+    reasons.push(`confidenza ${confidence.toFixed(2)} < soglia ${config.aiFallbackMinConfidence}`);
+  }
+  if (config.aiFallbackOnIllegible && /(illeggibil|non leggibil|poco leggibil|incert|dubbio|bassa qualit)/.test(warnings)) {
+    reasons.push('sono state segnalate parti illeggibili o incerte');
+  }
+  const minChars = Math.max(1, files.length) * config.aiFallbackMinCharsPerImage;
+  if (extractedText.length < minChars) {
+    reasons.push(`trascrizione troppo breve (${extractedText.length}/${minChars} caratteri)`);
+  }
+
+  return { needed: reasons.length > 0, reason: reasons.join('; ') };
+}
+
 export async function analyzeImages({ config, files, metadata, vaultNotes, vaultAnalysis, matchedSubject }) {
   const images = files.map(serializeImage);
   const existingTitles = vaultNotes
@@ -132,18 +174,60 @@ Regole precise basate sul vault reale:
   "warnings": ["Eventuali dubbi o parti illeggibili"]
 }`;
 
-  switch (config.aiProvider) {
-    case 'mock':
-      return normalizeAiResult(await mockAnalyze({ metadata, files, vaultNotes }));
-    case 'openai':
-    case 'openai-compatible':
-    case 'openrouter':
-      return normalizeAiResult(await openAiAnalyze({ config, prompt, images }));
-    case 'gemini':
-      return normalizeAiResult(await geminiAnalyze({ config, prompt, images }));
-    case 'ollama':
-      return normalizeAiResult(await ollamaAnalyze({ config, prompt, images }));
-    default:
-      throw new Error(`Provider AI non supportato: ${config.aiProvider}. Usa mock, gemini, openai, openai-compatible, openrouter o ollama.`);
+  let primary = null;
+  let primaryError = null;
+  try {
+    primary = await runProvider({ providerConfig: config, prompt, images, metadata, files, vaultNotes });
+    primary.modelUsed = config.aiModel;
+    primary.fallbackUsed = false;
+    primary.fallbackAttempted = false;
+    primary.fallbackReason = '';
+  } catch (error) {
+    primaryError = error;
   }
+
+  const fallbackConfig = {
+    ...config,
+    aiProvider: config.aiFallbackProvider,
+    aiModel: config.aiFallbackModel,
+    aiApiKey: config.aiFallbackApiKey,
+    aiBaseUrl: config.aiFallbackBaseUrl
+  };
+  const fallbackDecision = primary
+    ? shouldUseAdvancedFallback(primary, files, config)
+    : { needed: Boolean(config.aiFallbackEnabled && config.aiFallbackModel), reason: `provider primario fallito: ${primaryError?.message || primaryError}` };
+
+  if (fallbackDecision.needed) {
+    try {
+      const advanced = await runProvider({
+        providerConfig: fallbackConfig,
+        prompt,
+        images,
+        metadata,
+        files,
+        vaultNotes
+      });
+      advanced.modelUsed = fallbackConfig.aiModel;
+      advanced.primaryModel = config.aiModel;
+      advanced.fallbackUsed = true;
+      advanced.fallbackAttempted = true;
+      advanced.fallbackReason = fallbackDecision.reason;
+      return advanced;
+    } catch (fallbackError) {
+      if (!primary) {
+        throw new Error(`Provider primario fallito (${primaryError?.message || primaryError}). Fallback ${fallbackConfig.aiModel} fallito: ${fallbackError.message}`);
+      }
+      primary.warnings = uniqueStrings([
+        ...(primary.warnings || []),
+        `Fallback ${fallbackConfig.aiModel} non riuscito: ${fallbackError.message}`
+      ]);
+      primary.fallbackAttempted = true;
+      primary.fallbackUsed = false;
+      primary.fallbackReason = fallbackDecision.reason;
+      return primary;
+    }
+  }
+
+  if (!primary) throw primaryError;
+  return primary;
 }

@@ -126,6 +126,12 @@ Tutte le variabili sono documentate in `.env.example`:
 | `AI_API_KEY` | vuota | Chiave API |
 | `AI_BASE_URL` | vuota | Base URL del provider |
 | `AI_JSON_MODE` | `true` | Richiede output JSON al provider OpenAI-compatibile |
+| `AI_FALLBACK_ENABLED` | `true` nell'esempio | Abilita il fallback a un modello più potente |
+| `AI_FALLBACK_PROVIDER` | stesso provider | Provider del fallback |
+| `AI_FALLBACK_MODEL` | vuoto | Modello avanzato di fallback |
+| `AI_FALLBACK_MIN_CONFIDENCE` | `0.7` | Soglia sotto la quale scatta il fallback |
+| `AI_FALLBACK_ON_ILLEGIBLE` | `true` | Fallback se l'AI segnala parti illeggibili |
+| `AI_FALLBACK_MIN_CHARS_PER_IMAGE` | `80` | Lunghezza minima della trascrizione per immagine |
 | `WORKER_POLL_MS` | `1500` | Pausa tra i job del worker |
 | `WEBDAV_ENABLED` | `false` | Abilita il server WebDAV per Obsidian Mobile |
 | `WEBDAV_PATH` | `/webdav` | Percorso HTTP del server WebDAV |
@@ -172,6 +178,47 @@ Tutte le variabili sono documentate in `.env.example`:
 | `GET` | `/api/courses` | Corsi presenti nello storico |
 | `PROPFIND/GET/PUT/...` | `/webdav/*` | Sincronizzazione WebDAV del vault Obsidian |
 | `POST` | `/api/vault/rebuild-artifacts` | Rigenera indici e mappe di tutte le materie |
+
+## Fallback automatico Gemini Flash → Gemini Pro
+
+Il backend supporta un secondo modello avanzato. Se l’analisi primaria è debole, UniAi ripete automaticamente l’elaborazione con il modello di fallback.
+
+Esempio consigliato:
+
+```env
+AI_PROVIDER=gemini
+AI_MODEL=gemini-2.5-flash
+AI_API_KEY=la-tua-chiave
+
+AI_FALLBACK_ENABLED=true
+AI_FALLBACK_PROVIDER=gemini
+AI_FALLBACK_MODEL=gemini-2.5-pro
+AI_FALLBACK_MIN_CONFIDENCE=0.7
+AI_FALLBACK_ON_ILLEGIBLE=true
+AI_FALLBACK_MIN_CHARS_PER_IMAGE=80
+```
+
+Il fallback viene attivato quando:
+
+- la confidenza restituita dal modello è inferiore alla soglia;
+- compaiono warning su parti illeggibili o incerte;
+- la trascrizione è troppo breve rispetto al numero di immagini;
+- il Markdown è incompleto;
+- il provider primario restituisce un errore.
+
+Il risultato del job contiene in `result_json.ai`:
+
+```json
+{
+  "primaryModel": "gemini-2.5-flash",
+  "modelUsed": "gemini-2.5-pro",
+  "fallbackUsed": true,
+  "fallbackAttempted": true,
+  "fallbackReason": "confidenza 0.42 < soglia 0.7"
+}
+```
+
+Se anche il fallback fallisce, la nota primaria viene conservata e viene aggiunto un warning, evitando di perdere l’intera elaborazione.
 
 ## App Android
 

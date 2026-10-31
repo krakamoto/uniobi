@@ -9,6 +9,7 @@ import { createWorker } from '../src/worker.js';
 import { createApp } from '../src/app.js';
 import { selectWikilinks, scanVault } from '../src/vault.js';
 import { geminiAnalyze } from '../src/ai/gemini.js';
+import { analyzeImages } from '../src/ai/index.js';
 import { sanitizeFilename, isPathInside } from '../src/utils.js';
 import { buildFinalMarkdown, validateLatexDelimiters } from '../src/markdown.js';
 
@@ -268,4 +269,81 @@ test('il LaTeX non delimitato viene segnalato e correttamente formattato', () =>
     allowCreate: false
   });
   assert.match(markdown, /LaTeX non racchiuso/);
+});
+
+
+test('fallback automatico Gemini Flash → Gemini Pro su bassa confidenza', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-ai-fallback-'));
+  const imagePath = path.join(root, 'appunti.png');
+  writeFileSync(imagePath, PNG_1X1);
+  const originalFetch = global.fetch;
+  const requestUrls = [];
+  global.fetch = async (url, options) => {
+    requestUrls.push(String(url));
+    const isPro = String(url).includes('gemini-2.5-pro');
+    const result = isPro
+      ? {
+          title: 'Risultato Pro',
+          course: 'Test',
+          subject: 'Test',
+          date: '2025-10-31',
+          tags: ['test'],
+          summary: 'Risultato del modello avanzato',
+          extractedText: 'Trascrizione completa e leggibile prodotta dal modello avanzato.',
+          markdown: '# Risultato Pro\n\n## Contenuto\n\nTesto completo.',
+          links: [],
+          keyConcepts: ['concetto'],
+          conceptRelations: [],
+          confidence: 0.95,
+          warnings: []
+        }
+      : {
+          title: 'Risultato Flash',
+          course: 'Test',
+          date: '2025-10-31',
+          tags: ['test'],
+          summary: 'Risultato incerto',
+          extractedText: 'Poco testo',
+          markdown: '# Risultato Flash\n\nTesto incerto.',
+          links: [],
+          confidence: 0.2,
+          warnings: ['Parte illeggibile nella foto']
+        };
+    return new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: JSON.stringify(result) }] } }]
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    const result = await analyzeImages({
+      config: {
+        aiProvider: 'gemini',
+        aiModel: 'gemini-2.5-flash',
+        aiApiKey: 'test-key',
+        aiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+        aiJsonMode: true,
+        aiFallbackEnabled: true,
+        aiFallbackProvider: 'gemini',
+        aiFallbackModel: 'gemini-2.5-pro',
+        aiFallbackApiKey: 'test-key',
+        aiFallbackBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+        aiFallbackMinConfidence: 0.7,
+        aiFallbackOnIllegible: true,
+        aiFallbackMinCharsPerImage: 10
+      },
+      files: [{ absolutePath: imagePath, mimeType: 'image/png', originalName: 'appunti.png' }],
+      metadata: { course: 'Test', date: '2025-10-31', title: '', tags: [], userNotes: '', files: [] },
+      vaultNotes: []
+    });
+    assert.equal(requestUrls.length, 2);
+    assert.match(requestUrls[0], /gemini-2.5-flash:generateContent/);
+    assert.match(requestUrls[1], /gemini-2.5-pro:generateContent/);
+    assert.equal(result.fallbackUsed, true);
+    assert.equal(result.modelUsed, 'gemini-2.5-pro');
+    assert.equal(result.title, 'Risultato Pro');
+    assert.match(result.fallbackReason, /confidenza|illeggibil/i);
+  } finally {
+    global.fetch = originalFetch;
+    rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -101,7 +101,14 @@ export function createWorker({ config, store }) {
         conceptRelations: aiResult.conceptRelations,
         confidence: aiResult.confidence,
         warnings: aiResult.warnings,
-        links
+        links,
+        ai: {
+          primaryModel: aiResult.primaryModel || aiResult.modelUsed || config.aiModel,
+          modelUsed: aiResult.modelUsed || config.aiModel,
+          fallbackUsed: Boolean(aiResult.fallbackUsed),
+          fallbackAttempted: Boolean(aiResult.fallbackAttempted),
+          fallbackReason: aiResult.fallbackReason || ''
+        }
       };
 
       store.updateJob(jobId, {

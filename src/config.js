@@ -34,6 +34,12 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     throw new Error('WEBDAV_PASSWORD è obbligatoria quando WEBDAV_ENABLED=true.');
   }
 
+  const aiFallbackEnabled = bool(env.AI_FALLBACK_ENABLED, false);
+  const aiFallbackModel = String(env.AI_FALLBACK_MODEL || '').trim();
+  if (aiFallbackEnabled && !aiFallbackModel) {
+    throw new Error('AI_FALLBACK_MODEL è obbligatorio quando AI_FALLBACK_ENABLED=true.');
+  }
+
   const rawDatabase = String(env.DATABASE_URL || '').trim();
   const databaseRelative = rawDatabase
     .replace(/^sqlite:\/\/\//, '')
@@ -58,6 +64,14 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     aiApiKey: env.AI_API_KEY || '',
     aiBaseUrl: env.AI_BASE_URL || '',
     aiJsonMode: bool(env.AI_JSON_MODE, true),
+    aiFallbackEnabled,
+    aiFallbackProvider: (env.AI_FALLBACK_PROVIDER || env.AI_PROVIDER || 'gemini').toLowerCase(),
+    aiFallbackModel,
+    aiFallbackApiKey: env.AI_FALLBACK_API_KEY || env.AI_API_KEY || '',
+    aiFallbackBaseUrl: env.AI_FALLBACK_BASE_URL || env.AI_BASE_URL || '',
+    aiFallbackMinConfidence: number(env.AI_FALLBACK_MIN_CONFIDENCE, 0.7),
+    aiFallbackOnIllegible: bool(env.AI_FALLBACK_ON_ILLEGIBLE, true),
+    aiFallbackMinCharsPerImage: number(env.AI_FALLBACK_MIN_CHARS_PER_IMAGE, 80),
     autoSaveToVault: bool(env.AUTO_SAVE_TO_VAULT, false),
     allowCreateMissingWikilinks: bool(env.ALLOW_CREATE_MISSING_WIKILINKS, false),
     workerPollMs: number(env.WORKER_POLL_MS, 1500),
