@@ -377,10 +377,10 @@ OBSIDIAN_SUBJECT_ATTACHMENTS_SUBDIR=Allegati
 ```
 
 3. creare automaticamente una cartella `Allegati` dentro la cartella della materia;
-4. inserire nella nota l’embed Obsidian:
+4. inserire nella nota un embed Markdown relativo alla nota:
 
 ```markdown
-![[uni/Uni/magistrale/nome-materia/Allegati/fig-...png]]
+![Didascalia](Allegati/fig-...png)
 *Didascalia della figura*
 ```
 

@@ -41,10 +41,11 @@ function normalizeBbox(value, metadata) {
   return { left, top, width: right - left, height: bottom - top };
 }
 
-function figureEmbed(assetRelativePath, caption) {
-  const relative = assetRelativePath;
+function figureEmbed(fileName, caption) {
   const cleanCaption = String(caption || '').replace(/\s+/g, ' ').trim();
-  return `![[${relative}]]${cleanCaption ? `\n*${cleanCaption}*` : ''}`;
+  // Link Markdown relativo alla nota: funziona anche se Obsidian non indicizza subito il wikilink.
+  const alt = cleanCaption.replace(/[\[\]()]/g, '').slice(0, 120) || 'Figura';
+  return `![${alt}](Allegati/${fileName})${cleanCaption ? `\n*${cleanCaption}*` : ''}`;
 }
 
 export async function materializeFiguresForNotes({ notes, job, config, subjectPath }) {
@@ -94,7 +95,7 @@ export async function materializeFiguresForNotes({ notes, job, config, subjectPa
           .png({ quality: 92 })
           .toFile(destination);
         const assetRelative = path.posix.join(attachmentsRelative, fileName);
-        const embed = figureEmbed(assetRelative, caption);
+        const embed = figureEmbed(fileName, caption);
         const figId = String(figure.id || '').trim();
         const placeholderPatterns = figId
           ? [

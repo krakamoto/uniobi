@@ -45,7 +45,7 @@ test('ritaglia una figura dall’immagine originale e sostituisce il placeholder
       job,
       config
     });
-    assert.match(notes[0].markdown, /!\[\[uni\/Uni\/magistrale\/controlli\/Allegati\/fig-job-figu-n1-f1-meta-sinistra-del-grafico\.png\]\]/);
+    assert.match(notes[0].markdown, /!\[Metà sinistra del grafico\]\(Allegati\/fig-job-figu-n1-f1-meta-sinistra-del-grafico\.png\)/);
     assert.match(notes[0].markdown, /Metà sinistra del grafico/);
     assert.equal(notes[0].figures.length, 1);
     const assetPath = path.join(vaultPath, notes[0].figures[0].assetPath);
