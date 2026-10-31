@@ -120,7 +120,7 @@ test('flusso end-to-end: upload, analisi mock, salvataggio atomico nel vault', a
   });
   assert.equal(saveResponse.status, 201);
   const savePayload = await saveResponse.json();
-  assert.match(savePayload.vaultPath, /^Università\/Lezioni\/2025-10-31 - Integrali doppi\.md$/);
+  assert.match(savePayload.vaultPath, /^Università\/Lezioni\/Analisi Matematica II\/2025-10-31 - Integrali doppi\.md$/);
 
   const savedPath = path.join(vaultPath, savePayload.vaultPath);
   assert.ok(existsSync(savedPath));

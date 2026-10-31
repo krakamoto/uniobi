@@ -6,7 +6,7 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { newId, nowIso, isPathInside, uniqueStrings, parseJsonSafe } from './utils.js';
 import { saveNoteToVault, vaultIsWritable } from './vault.js';
 import { createWebdavHandler } from './webdav.js';
-import { analyzeVaultStructure, matchSubject, rebuildAllVaultArtifacts } from './vault-analysis.js';
+import { analyzeVaultStructure, matchSubject, rebuildAllVaultArtifacts, suggestedSubjectPath } from './vault-analysis.js';
 
 const MIME_EXTENSIONS = {
   'image/jpeg': '.jpg',
@@ -266,10 +266,17 @@ export function createApp({ config, store, worker }) {
       const subject = matchSubject(job.course, analysis.subjects)
         || analysis.subjects.find((item) => item.name === job.result_json?.subject)
         || null;
+      const destinationSubjectPath = subject?.relativePath
+        || job.result_json?.subjectPath
+        || suggestedSubjectPath({
+          subjectName: job.result_json?.subject || job.course,
+          course: job.course,
+          config
+        });
       const saved = saveNoteToVault({
         vaultPath: config.vaultPath,
         notesSubdir: config.notesSubdir,
-        relativeDir: subject?.relativePath,
+        relativeDir: destinationSubjectPath,
         title,
         date: job.lesson_date,
         markdown: job.markdown,

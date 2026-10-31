@@ -119,6 +119,7 @@ Tutte le variabili sono documentate in `.env.example`:
 | `OBSIDIAN_VAULT_PATH` | `./obsidian-vault` | Percorso del vault Obsidian |
 | `OBSIDIAN_NOTES_SUBDIR` | `Università/Lezioni` | Sottocartella di destinazione per materie non riconosciute |
 | `OBSIDIAN_SUBJECT_ROOTS` | vuota | Cartelle che contengono una sottocartella per ogni materia; separate da virgola |
+| `OBSIDIAN_NEW_SUBJECT_ROOT` | vuota | Cartella in cui creare le nuove materie |
 | `AUTO_SAVE_TO_VAULT` | `false` | Salva automaticamente al termine dell’analisi |
 | `ALLOW_CREATE_MISSING_WIKILINKS` | `false` | Consente wikilink verso note non ancora esistenti |
 | `AI_PROVIDER` | `mock` | `mock`, `gemini`, `openai`, `openai-compatible`, `openrouter`, `ollama` |
@@ -425,7 +426,19 @@ Il modello deve restituire anche:
 }
 ```
 
-La nota viene salvata nella cartella della materia corrispondente, non in una cartella generica.
+La nota viene salvata nella cartella della materia corrispondente. Se la materia non esiste, UniAi crea automaticamente una cartella con il nome della materia sotto `OBSIDIAN_NEW_SUBJECT_ROOT` e genera subito indice e mappa concettuale.
+
+Esempio:
+
+```env
+OBSIDIAN_NEW_SUBJECT_ROOT=uni/Uni/triennale
+```
+
+Un corso chiamato `Aerospace Dynamic Systems Analysis` verrà salvato in:
+
+```text
+uni/Uni/triennale/Aerospace Dynamic Systems Analysis/
+```
 
 ## Test
 

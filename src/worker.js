@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { analyzeImages } from './ai/index.js';
 import { buildFinalMarkdown } from './markdown.js';
 import { selectWikilinks, saveNoteToVault } from './vault.js';
-import { analyzeVaultStructure, matchSubject } from './vault-analysis.js';
+import { analyzeVaultStructure, matchSubject, suggestedSubjectPath } from './vault-analysis.js';
 import { newId, nowIso, uniqueStrings } from './utils.js';
 
 function delay(ms) {
@@ -72,6 +72,12 @@ export function createWorker({ config, store }) {
 
       const finalTitle = aiResult.title || job.requested_title || `Appunti ${job.course || ''} ${job.lesson_date || ''}`.trim() || 'Appunti senza titolo';
       const resolvedSubject = matchedSubject || matchSubject(aiResult.subject, vaultAnalysis.subjects);
+      const newSubjectPath = suggestedSubjectPath({
+        subjectName: aiResult.subject || job.course,
+        course: job.course,
+        config
+      });
+      const destinationSubjectPath = resolvedSubject?.relativePath || newSubjectPath;
       const links = selectWikilinks({
         aiLinks: aiResult.links,
         markdown: aiResult.markdown,
@@ -102,8 +108,9 @@ export function createWorker({ config, store }) {
       const resultJson = {
         title: finalTitle,
         course: job.course || aiResult.course || '',
-        subject: resolvedSubject?.name || aiResult.subject || '',
-        subjectPath: resolvedSubject?.relativePath || '',
+        subject: resolvedSubject?.name || aiResult.subject || job.course || '',
+        subjectPath: destinationSubjectPath,
+        subjectIsNew: !resolvedSubject,
         date: job.lesson_date || aiResult.date || '',
         tags: uniqueStrings([...(job.user_tags || []), ...aiResult.tags]),
         aliases: aiResult.aliases,
@@ -138,7 +145,7 @@ export function createWorker({ config, store }) {
         const saved = saveNoteToVault({
           vaultPath: config.vaultPath,
           notesSubdir: config.notesSubdir,
-          relativeDir: resolvedSubject?.relativePath,
+          relativeDir: destinationSubjectPath,
           title: finalTitle,
           date: job.lesson_date,
           markdown,

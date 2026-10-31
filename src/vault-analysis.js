@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import {
   existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync
 } from 'node:fs';
-import { normalizeTitle, slugify, uniqueStrings } from './utils.js';
+import { normalizeTitle, sanitizeFilename, slugify, uniqueStrings } from './utils.js';
 import { validateLatexDelimiters } from './markdown.js';
 
 export const GENERATED_INDEX = '_Indice.md';
@@ -201,6 +201,17 @@ export function normalizeSubjectName(value) {
   return normalizeTitle(String(value || '').replace(/\b(ii|iii|iv)\b/gi, (roman) => ({
     ii: '2', iii: '3', iv: '4'
   }[roman.toLowerCase()] || roman)));
+}
+
+export function suggestedSubjectPath({ subjectName, course, config }) {
+  const root = String(
+    config.obsidianNewSubjectRoot
+    || config.obsidianSubjectRoots?.[0]
+    || config.notesSubdir
+    || 'Università/Lezioni'
+  ).replace(/^\/+|\/+$/g, '');
+  const name = sanitizeFilename(subjectName || course || 'Nuova materia', 'Nuova materia');
+  return path.posix.join(root, name);
 }
 
 export function matchSubject(course, subjects) {
