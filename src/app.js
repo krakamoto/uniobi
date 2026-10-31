@@ -234,7 +234,18 @@ export function createApp({ config, store, worker }) {
     const job = store.getJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Job non trovato.' });
     if (job.status === 'processing') return res.status(409).json({ error: 'Elaborazione già in corso.' });
-    const updated = store.updateJob(job.id, { status: 'uploaded', error: null, vault_path: null });
+    const updated = store.updateJob(job.id, {
+      status: 'uploaded',
+      error: null,
+      vault_path: null,
+      extracted_text: null,
+      markdown: null,
+      result_json: null,
+      links_json: [],
+      warnings_json: [],
+      confidence: null,
+      processed_at: null
+    });
     worker.enqueue(job.id);
     res.status(202).json({ job: jobSummary(updated) });
   });

@@ -29,7 +29,18 @@ export function createWorker({ config, store }) {
     if (!job) throw new Error('Job non trovato.');
     if (job.status === 'processing') return job;
 
-    store.updateJob(jobId, { status: 'processing', error: null, updated_at: nowIso() });
+    store.updateJob(jobId, {
+      status: 'processing',
+      error: null,
+      extracted_text: null,
+      markdown: null,
+      result_json: null,
+      links_json: [],
+      warnings_json: [],
+      confidence: null,
+      processed_at: null,
+      updated_at: nowIso()
+    });
     try {
       const files = await resolveFiles(job);
       if (files.length === 0) throw new Error('Nessun file associato al job.');

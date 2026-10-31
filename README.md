@@ -58,7 +58,7 @@ Verifica che l’utente che esegue Node abbia permessi di lettura e scrittura su
 
 ```env
 AI_PROVIDER=gemini
-AI_MODEL=gemini-2.5-flash
+AI_MODEL=gemini-3.8-flash
 AI_API_KEY=la-tua-chiave-gemini
 AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 ```
@@ -122,7 +122,7 @@ Tutte le variabili sono documentate in `.env.example`:
 | `AUTO_SAVE_TO_VAULT` | `false` | Salva automaticamente al termine dell’analisi |
 | `ALLOW_CREATE_MISSING_WIKILINKS` | `false` | Consente wikilink verso note non ancora esistenti |
 | `AI_PROVIDER` | `mock` | `mock`, `gemini`, `openai`, `openai-compatible`, `openrouter`, `ollama` |
-| `AI_MODEL` | `gemini-2.5-flash` | Modello visione |
+| `AI_MODEL` | `gemini-3.8-flash` | Modello visione |
 | `AI_API_KEY` | vuota | Chiave API |
 | `AI_BASE_URL` | vuota | Base URL del provider |
 | `AI_JSON_MODE` | `true` | Richiede output JSON al provider OpenAI-compatibile |
@@ -187,16 +187,18 @@ Esempio consigliato:
 
 ```env
 AI_PROVIDER=gemini
-AI_MODEL=gemini-2.5-flash
+AI_MODEL=gemini-3.8-flash
 AI_API_KEY=la-tua-chiave
 
 AI_FALLBACK_ENABLED=true
 AI_FALLBACK_PROVIDER=gemini
-AI_FALLBACK_MODEL=gemini-2.5-pro
+AI_FALLBACK_MODEL=gemini-3.1-pro-preview
 AI_FALLBACK_MIN_CONFIDENCE=0.7
 AI_FALLBACK_ON_ILLEGIBLE=true
 AI_FALLBACK_MIN_CHARS_PER_IMAGE=80
 ```
+
+> Nota modelli: i nomi disponibili cambiano spesso. In questo ambiente `gemini-3.6-flash` ha funzionato, mentre `gemini-3.1-pro-preview` non è disponibile con quota free tier. Con billing attivo si può usare Gemini Pro come fallback; senza billing conviene un fallback tra modelli Flash.
 
 Il fallback viene attivato quando:
 
@@ -210,8 +212,8 @@ Il risultato del job contiene in `result_json.ai`:
 
 ```json
 {
-  "primaryModel": "gemini-2.5-flash",
-  "modelUsed": "gemini-2.5-pro",
+  "primaryModel": "gemini-3.8-flash",
+  "modelUsed": "gemini-3.1-pro-preview",
   "fallbackUsed": true,
   "fallbackAttempted": true,
   "fallbackReason": "confidenza 0.42 < soglia 0.7"

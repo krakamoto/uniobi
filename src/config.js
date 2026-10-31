@@ -60,7 +60,7 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     maxUploadMb: number(env.MAX_UPLOAD_MB, 20),
     maxFilesPerUpload: number(env.MAX_FILES_PER_UPLOAD, 10),
     aiProvider: (env.AI_PROVIDER || 'mock').toLowerCase(),
-    aiModel: env.AI_MODEL || 'gemini-2.5-flash',
+    aiModel: env.AI_MODEL || 'gemini-3.8-flash',
     aiApiKey: env.AI_API_KEY || '',
     aiBaseUrl: env.AI_BASE_URL || '',
     aiJsonMode: bool(env.AI_JSON_MODE, true),
