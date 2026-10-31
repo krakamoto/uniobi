@@ -3,6 +3,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { dateForFilename, isPathInside, normalizeTitle, sanitizeFilename, sha256, uniqueStrings } from './utils.js';
+import { rebuildArtifactsForFile } from './vault-analysis.js';
 
 const IGNORED_DIRS = new Set(['.obsidian', '.trash', '.git', 'node_modules']);
 
@@ -154,9 +155,10 @@ export function selectWikilinks({ aiLinks = [], markdown = '', course = '', titl
   return selected.slice(0, 12);
 }
 
-export function safeVaultDestination({ vaultPath, notesSubdir, title, date }) {
+export function safeVaultDestination({ vaultPath, notesSubdir, relativeDir, title, date }) {
   if (!vaultPath) throw new Error('OBSIDIAN_VAULT_PATH non configurato.');
-  const targetDir = path.resolve(vaultPath, notesSubdir || '');
+  const targetRelative = relativeDir || notesSubdir || '';
+  const targetDir = path.resolve(vaultPath, targetRelative);
   if (!isPathInside(path.resolve(vaultPath), targetDir) && targetDir !== path.resolve(vaultPath)) {
     throw new Error('La cartella di destinazione Obsidian non è valida.');
   }
@@ -171,8 +173,8 @@ export function safeVaultDestination({ vaultPath, notesSubdir, title, date }) {
   return candidate;
 }
 
-export function saveNoteToVault({ vaultPath, notesSubdir, title, date, markdown, jobId, store, idGenerator }) {
-  const destination = safeVaultDestination({ vaultPath, notesSubdir, title, date });
+export function saveNoteToVault({ vaultPath, notesSubdir, relativeDir, title, date, markdown, jobId, store, idGenerator, subjectRoots = [] }) {
+  const destination = safeVaultDestination({ vaultPath, notesSubdir, relativeDir, title, date });
   const temp = `${destination}.tmp-${process.pid}-${Date.now()}`;
   writeFileSync(temp, markdown, 'utf8');
   renameSync(temp, destination);
@@ -187,6 +189,14 @@ export function saveNoteToVault({ vaultPath, notesSubdir, title, date, markdown,
       contentHash: sha256(markdown)
     });
   }
+
+  try {
+    const artifacts = rebuildArtifactsForFile(vaultPath, destination, { subjectRoots });
+    if (artifacts) console.log(`[vault] Indice e mappa aggiornati per ${artifacts.subject}`);
+  } catch (error) {
+    console.error(`[vault] Impossibile aggiornare indice/mappa: ${error.message}`);
+  }
+
   return { absolutePath: destination, relativePath };
 }
 

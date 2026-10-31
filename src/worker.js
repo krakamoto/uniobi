@@ -2,7 +2,8 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { analyzeImages } from './ai/index.js';
 import { buildFinalMarkdown } from './markdown.js';
-import { scanVault, selectWikilinks, saveNoteToVault } from './vault.js';
+import { selectWikilinks, saveNoteToVault } from './vault.js';
+import { analyzeVaultStructure, matchSubject } from './vault-analysis.js';
 import { newId, nowIso, uniqueStrings } from './utils.js';
 
 function delay(ms) {
@@ -32,7 +33,16 @@ export function createWorker({ config, store }) {
     try {
       const files = await resolveFiles(job);
       if (files.length === 0) throw new Error('Nessun file associato al job.');
-      const vaultNotes = scanVault(config.vaultPath, config.notesSubdir);
+      const vaultAnalysis = analyzeVaultStructure(config.vaultPath, {
+        subjectRoots: config.obsidianSubjectRoots
+      });
+      const vaultNotes = vaultAnalysis.notes.map((note) => ({
+        title: note.basename,
+        aliases: uniqueStrings([note.title, ...note.aliases]),
+        tags: note.tags,
+        relativePath: note.relativePath
+      }));
+      const matchedSubject = matchSubject(job.course, vaultAnalysis.subjects);
       const aiResult = await analyzeImages({
         config,
         files,
@@ -44,10 +54,13 @@ export function createWorker({ config, store }) {
           userNotes: job.user_notes,
           files
         },
-        vaultNotes
+        vaultNotes,
+        vaultAnalysis,
+        matchedSubject
       });
 
       const finalTitle = aiResult.title || job.requested_title || `Appunti ${job.course || ''} ${job.lesson_date || ''}`.trim() || 'Appunti senza titolo';
+      const resolvedSubject = matchedSubject || matchSubject(aiResult.subject, vaultAnalysis.subjects);
       const links = selectWikilinks({
         aiLinks: aiResult.links,
         markdown: aiResult.markdown,
@@ -63,6 +76,7 @@ export function createWorker({ config, store }) {
         metadata: {
           title: finalTitle,
           course: job.course || aiResult.course,
+          subject: resolvedSubject?.name || aiResult.subject,
           date: job.lesson_date || aiResult.date,
           tags: uniqueStrings([...(job.user_tags || []), ...aiResult.tags]),
           fallbackContent: aiResult.extractedText
@@ -77,10 +91,14 @@ export function createWorker({ config, store }) {
       const resultJson = {
         title: finalTitle,
         course: job.course || aiResult.course || '',
+        subject: resolvedSubject?.name || aiResult.subject || '',
+        subjectPath: resolvedSubject?.relativePath || '',
         date: job.lesson_date || aiResult.date || '',
         tags: uniqueStrings([...(job.user_tags || []), ...aiResult.tags]),
         aliases: aiResult.aliases,
         summary: aiResult.summary,
+        keyConcepts: aiResult.keyConcepts,
+        conceptRelations: aiResult.conceptRelations,
         confidence: aiResult.confidence,
         warnings: aiResult.warnings,
         links
@@ -102,12 +120,14 @@ export function createWorker({ config, store }) {
         const saved = saveNoteToVault({
           vaultPath: config.vaultPath,
           notesSubdir: config.notesSubdir,
+          relativeDir: resolvedSubject?.relativePath,
           title: finalTitle,
           date: job.lesson_date,
           markdown,
           jobId,
           store,
-          idGenerator: newId
+          idGenerator: newId,
+          subjectRoots: config.obsidianSubjectRoots
         });
         store.updateJob(jobId, { vault_path: saved.relativePath });
       }

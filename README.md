@@ -117,7 +117,8 @@ Tutte le variabili sono documentate in `.env.example`:
 | `MAX_UPLOAD_MB` | `20` | Dimensione massima per file |
 | `MAX_FILES_PER_UPLOAD` | `10` | Numero massimo di immagini per job |
 | `OBSIDIAN_VAULT_PATH` | `./obsidian-vault` | Percorso del vault Obsidian |
-| `OBSIDIAN_NOTES_SUBDIR` | `Università/Lezioni` | Sottocartella di destinazione |
+| `OBSIDIAN_NOTES_SUBDIR` | `Università/Lezioni` | Sottocartella di destinazione per materie non riconosciute |
+| `OBSIDIAN_SUBJECT_ROOTS` | vuota | Cartelle che contengono una sottocartella per ogni materia; separate da virgola |
 | `AUTO_SAVE_TO_VAULT` | `false` | Salva automaticamente al termine dell’analisi |
 | `ALLOW_CREATE_MISSING_WIKILINKS` | `false` | Consente wikilink verso note non ancora esistenti |
 | `AI_PROVIDER` | `mock` | `mock`, `gemini`, `openai`, `openai-compatible`, `openrouter`, `ollama` |
@@ -170,6 +171,7 @@ Tutte le variabili sono documentate in `.env.example`:
 | `POST` | `/api/jobs/:id/save-to-vault` | Salva la nota nel vault |
 | `GET` | `/api/courses` | Corsi presenti nello storico |
 | `PROPFIND/GET/PUT/...` | `/webdav/*` | Sincronizzazione WebDAV del vault Obsidian |
+| `POST` | `/api/vault/rebuild-artifacts` | Rigenera indici e mappe di tutte le materie |
 
 ## App Android
 
@@ -301,6 +303,80 @@ https://tuo-dominio/webdav/
 > La sincronizzazione è bidirezionale ma non è un filesystem montato: Remotely Save sincronizza quando viene avviato o secondo la pianificazione configurata. Evita modifiche simultanee dello stesso file da dispositivi diversi per non creare conflitti.
 
 Per una sincronizzazione continua in tempo reale è possibile usare Syncthing tra server e telefono come alternativa a WebDAV, ma richiede l'installazione di Syncthing su entrambi i dispositivi.
+
+## Indici e mappe concettuali per materia
+
+UniAi analizza la struttura reale del vault e riconosce le materie dalle cartelle configurate in:
+
+```env
+OBSIDIAN_SUBJECT_ROOTS=uni/Uni/triennale,uni/Uni/magistrale
+```
+
+Per ogni materia genera automaticamente tre file nella cartella della materia:
+
+```text
+_Indice.md
+_Mappa concettuale.md
+_Mappa concettuale.canvas
+```
+
+### `_Indice.md`
+
+Contiene:
+
+- tutte le note della materia, raggruppate per sottocartella;
+- wikilink diretti a ogni nota;
+- riassunto iniziale di ogni nota;
+- numero di note, wikilink e heading;
+- tag ricorrenti;
+- collegamenti all'indice e alla mappa.
+
+### `_Mappa concettuale.md`
+
+Contiene una mappa Mermaid generata dai wikilink tra note e dalla struttura delle cartelle. Obsidian la visualizza nativamente.
+
+### `_Mappa concettuale.canvas`
+
+È un Canvas Obsidian nativo con tutte le note della materia e le relative connessioni. Si può aprire, zoomare e trascinare.
+
+### Aggiornamento automatico
+
+Gli indici e le mappe vengono rigenerati automaticamente quando UniAi salva una nuova nota nella materia. È possibile rigenerarli manualmente:
+
+```bash
+npm run vault:indexes
+```
+
+Oppure via API autenticata:
+
+```bash
+curl -X POST http://localhost:3000/api/vault/rebuild-artifacts
+```
+
+### Istruzioni AI contestuali
+
+Prima di analizzare una nuova immagine, UniAi analizza il vault e passa al modello AI:
+
+- elenco delle materie e dei percorsi;
+- materia più probabile per il corso richiesto;
+- titoli delle note esistenti della materia;
+- convenzioni di formattazione del vault;
+- istruzioni su wikilink, LaTeX, callout, titoli e concetti chiave.
+
+Il modello deve restituire anche:
+
+```json
+{
+  "subject": "fluidodinamica",
+  "subjectPath": "uni/Uni/triennale/fluidodinamica",
+  "keyConcepts": ["concetto 1", "concetto 2"],
+  "conceptRelations": [
+    {"from": "concetto 1", "to": "concetto 2", "label": "relazione"}
+  ]
+}
+```
+
+La nota viene salvata nella cartella della materia corrispondente, non in una cartella generica.
 
 ## Test
 

@@ -212,6 +212,9 @@ export function createWebdavHandler({ config }) {
   const maxBytes = config.webdavMaxUploadMb * 1024 * 1024;
 
   return async function webdavHandler(req, res) {
+    res.on('finish', () => {
+      console.log(`[webdav] ${req.method} ${req.originalUrl || req.url} -> ${res.statusCode}`);
+    });
     try {
       if (!config.webdavEnabled) {
         return res.status(503).send('WebDAV non abilitato. Imposta WEBDAV_ENABLED=true e WEBDAV_PASSWORD nel server.');

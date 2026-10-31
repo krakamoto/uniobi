@@ -11,12 +11,13 @@ export function stripFrontmatter(markdown) {
   return match ? text.slice(match[0].length) : text;
 }
 
-export function buildFrontmatter({ title, course, date, tags, createdAt, aliases = [] }) {
+export function buildFrontmatter({ title, course, subject, date, tags, createdAt, aliases = [] }) {
   const cleanTags = uniqueStrings(tags).map((tag) => tag.replace(/^#/, '').replace(/\s+/g, '-'));
   const lines = [
     '---',
     `title: ${yamlString(title)}`,
     `course: ${course ? yamlString(course) : '""'}`,
+    `subject: ${subject ? yamlString(subject) : '""'}`,
     `date: ${date ? yamlString(date) : '""'}`,
     'tags:'
   ];
@@ -78,6 +79,21 @@ export function appendWarnings(markdown, warnings) {
   if (clean.length === 0) return markdown;
   return `${markdown.replace(/\s+$/, '')}\n\n> [!warning] Da verificare\n${clean.map((warning) => `> - ${warning}`).join('\n')}\n`;
 }
+export function appendKeyConcepts(markdown, keyConcepts, conceptRelations) {
+  let body = markdown.replace(/\s+$/, '');
+  const concepts = uniqueStrings(keyConcepts);
+  if (concepts.length > 0 && !/^##\s+Concetti chiave\s*$/mi.test(body)) {
+    body += `\n\n## Concetti chiave\n\n${concepts.map((concept) => `- ${concept}`).join('\n')}`;
+  }
+  if (conceptRelations.length > 0 && !/^##\s+Relazioni concettuali\s*$/mi.test(body)) {
+    const rows = conceptRelations.map((relation) => {
+      const label = relation.label ? ` — ${relation.label}` : '';
+      return `- **${relation.from}** → **${relation.to}**${label}`;
+    });
+    body += `\n\n## Relazioni concettuali\n\n${rows.join('\n')}`;
+  }
+  return body;
+}
 
 export function buildFinalMarkdown({ aiResult, metadata, links, warnings, createdAt, notes, allowCreate }) {
   const title = metadata.title || aiResult.title || 'Appunti senza titolo';
@@ -86,12 +102,14 @@ export function buildFinalMarkdown({ aiResult, metadata, links, warnings, create
 
   const sanitized = sanitizeWikilinks(body, links, allowCreate);
   body = sanitized.markdown;
+  body = appendKeyConcepts(body, aiResult.keyConcepts || [], aiResult.conceptRelations || []);
   body = appendVerifiedLinks(body, links);
   body = appendWarnings(body, [...(warnings || []), ...(aiResult.warnings || []), ...sanitized.warnings]);
 
   const frontmatter = buildFrontmatter({
     title,
     course: metadata.course || aiResult.course || '',
+    subject: metadata.subject || aiResult.subject || '',
     date: metadata.date || aiResult.date || '',
     tags: [...tags, 'appunti', 'uniai'],
     createdAt,

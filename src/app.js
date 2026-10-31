@@ -6,6 +6,7 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { newId, nowIso, isPathInside, uniqueStrings, parseJsonSafe } from './utils.js';
 import { saveNoteToVault, vaultIsWritable } from './vault.js';
 import { createWebdavHandler } from './webdav.js';
+import { analyzeVaultStructure, matchSubject, rebuildAllVaultArtifacts } from './vault-analysis.js';
 
 const MIME_EXTENSIONS = {
   'image/jpeg': '.jpg',
@@ -250,15 +251,21 @@ export function createApp({ config, store, worker }) {
 
     const title = job.result_json?.title || job.requested_title || 'Appunti senza titolo';
     try {
+      const analysis = analyzeVaultStructure(config.vaultPath, { subjectRoots: config.obsidianSubjectRoots });
+      const subject = matchSubject(job.course, analysis.subjects)
+        || analysis.subjects.find((item) => item.name === job.result_json?.subject)
+        || null;
       const saved = saveNoteToVault({
         vaultPath: config.vaultPath,
         notesSubdir: config.notesSubdir,
+        relativeDir: subject?.relativePath,
         title,
         date: job.lesson_date,
         markdown: job.markdown,
         jobId: job.id,
         store,
-        idGenerator: newId
+        idGenerator: newId,
+        subjectRoots: config.obsidianSubjectRoots
       });
       const updated = store.updateJob(job.id, {
         vault_path: saved.relativePath,
@@ -272,6 +279,20 @@ export function createApp({ config, store, worker }) {
 
   app.get('/api/courses', requireAuth, (req, res) => {
     res.json({ courses: store.listCourses() });
+  });
+
+  app.post('/api/vault/rebuild-artifacts', requireAuth, (req, res) => {
+    try {
+      const result = rebuildAllVaultArtifacts(config.vaultPath, { subjectRoots: config.obsidianSubjectRoots });
+      res.json({
+        ok: true,
+        subjects: result.analysis.subjects.length,
+        files: result.results.reduce((total, item) => total + item.files.length, 0),
+        details: result.results
+      });
+    } catch (error) {
+      res.status(500).json({ error: `Rigenerazione indici fallita: ${error.message}` });
+    }
   });
 
   app.use(express.static(config.publicDir, { index: false, maxAge: config.appEnv === 'production' ? '1h' : 0 }));

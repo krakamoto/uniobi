@@ -5,6 +5,7 @@ import { openAiAnalyze } from './openai.js';
 import { ollamaAnalyze } from './ollama.js';
 import { geminiAnalyze } from './gemini.js';
 import { uniqueStrings } from '../utils.js';
+import { buildAiVaultContext } from '../vault-analysis.js';
 
 export function serializeImage(file) {
   const buffer = readFileSync(file.absolutePath);
@@ -52,14 +53,25 @@ export function normalizeAiResult(raw, fallback = {}) {
         };
       }).filter((link) => link.target)
     : [];
+  const conceptRelations = Array.isArray(result.conceptRelations)
+    ? result.conceptRelations.map((relation) => ({
+        from: String(relation?.from || '').trim(),
+        to: String(relation?.to || '').trim(),
+        label: String(relation?.label || '').trim()
+      })).filter((relation) => relation.from && relation.to)
+    : [];
   return {
     title,
     course: String(result.course || fallback.course || '').trim(),
+    subject: String(result.subject || '').trim(),
+    subjectPath: String(result.subjectPath || result.subject_path || '').trim(),
     date: String(result.date || fallback.date || '').trim(),
     tags: uniqueStrings(Array.isArray(result.tags) ? result.tags : []),
     aliases: uniqueStrings(Array.isArray(result.aliases) ? result.aliases : []),
     summary: String(result.summary || '').trim(),
     extractedText: String(result.extractedText || result.extracted_text || '').trim(),
+    keyConcepts: uniqueStrings(Array.isArray(result.keyConcepts) ? result.keyConcepts : []),
+    conceptRelations,
     markdown,
     links,
     confidence: Number.isFinite(Number(result.confidence)) ? Math.max(0, Math.min(1, Number(result.confidence))) : 0.5,
@@ -67,14 +79,19 @@ export function normalizeAiResult(raw, fallback = {}) {
   };
 }
 
-export async function analyzeImages({ config, files, metadata, vaultNotes }) {
+export async function analyzeImages({ config, files, metadata, vaultNotes, vaultAnalysis, matchedSubject }) {
   const images = files.map(serializeImage);
   const existingTitles = vaultNotes
     .map((note) => note.title)
     .filter(Boolean)
     .slice(0, 250);
+  const vaultContext = vaultAnalysis
+    ? buildAiVaultContext(vaultAnalysis, matchedSubject, metadata.course)
+    : '';
 
   const prompt = `Analizza le immagini allegate di appunti universitari e convertile in una nota Markdown per Obsidian.
+
+${vaultContext}
 
 Metadati forniti dall'utente:
 - Corso: ${metadata.course || '(non specificato)'}
@@ -86,20 +103,28 @@ Metadati forniti dall'utente:
 Note già presenti nel vault Obsidian (usa SOLO questi titoli per i wikilink esistenti):
 ${existingTitles.length ? existingTitles.map((title) => `- ${title}`).join('\n') : '- (vault vuoto)'}
 
-Regole:
+Regole precise basate sul vault reale:
 1. Trascrivi fedelmente il contenuto; non inventare informazioni.
 2. Correggi solo refusi evidenti. Segnala le parti illeggibili con "[illeggibile]" e inseriscile in warnings.
-3. Produci Markdown Obsidian valido: titolo H1, sezioni, elenchi, formule LaTeX se presenti, callout per incertezze.
-4. Inserisci wikilink [[Titolo nota]] solo se il titolo è nell'elenco delle note esistenti. Non inventare wikilink.
-5. Restituisci ESCLUSIVAMENTE un oggetto JSON valido, senza testo fuori dal JSON, con questa forma:
+3. Produci Markdown Obsidian valido: H1, sezioni H2/H3, elenchi, formule LaTeX inline $...$ e display $$...$$, callout Obsidian per avvisi e incertezze.
+4. Usa un titolo descrittivo in italiano, senza data e senza prefisso numerico. Deve descrivere il concetto, non la lezione in generale.
+5. Classifica la nota nella materia esistente più pertinente. Se nessuna materia è pertinente, proponi un nome di materia breve e stabile.
+6. Inserisci wikilink [[Titolo nota]] solo verso titoli presenti nell'elenco delle note esistenti. Non inventare wikilink.
+7. Estrai 3-10 concetti chiave atomici e alcune relazioni concettuali tra loro. Usa termini coerenti con la terminologia delle note esistenti.
+8. Non includere frontmatter YAML: il backend lo genera. Il campo markdown deve contenere solo il corpo della nota.
+9. Restituisci ESCLUSIVAMENTE un oggetto JSON valido, senza testo fuori dal JSON, con questa forma:
 {
-  "title": "Titolo sintetico della lezione",
-  "course": "Nome corso",
+  "title": "Titolo sintetico del concetto",
+  "course": "Nome corso indicato o dedotto",
+  "subject": "Materia esistente o proposta",
+  "subjectPath": "Percorso relativo della materia esistente, se nota",
   "date": "YYYY-MM-DD",
   "tags": ["lezione", "argomento"],
-  "aliases": [],
+  "aliases": ["Sinonimo o variante terminologica"],
   "summary": "Breve riassunto",
   "extractedText": "Trascrizione testuale completa degli appunti",
+  "keyConcepts": ["concetto 1", "concetto 2"],
+  "conceptRelations": [{"from": "concetto 1", "to": "concetto 2", "label": "relazione"}],
   "markdown": "# Titolo\\n\\n## Contenuto\\n...",
   "links": [{"target": "Titolo nota esistente", "reason": "Motivo", "exists": true}],
   "confidence": 0.0,

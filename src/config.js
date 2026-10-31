@@ -50,6 +50,7 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     uploadDir: resolveFrom(projectRoot, env.UPLOAD_DIR, './data/uploads'),
     vaultPath,
     notesSubdir,
+    obsidianSubjectRoots: String(env.OBSIDIAN_SUBJECT_ROOTS || '').split(',').map((value) => value.trim()).filter(Boolean),
     maxUploadMb: number(env.MAX_UPLOAD_MB, 20),
     maxFilesPerUpload: number(env.MAX_FILES_PER_UPLOAD, 10),
     aiProvider: (env.AI_PROVIDER || 'mock').toLowerCase(),
