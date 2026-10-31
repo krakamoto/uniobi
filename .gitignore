@@ -1,0 +1,13 @@
+node_modules/
+.env
+data/uploads/*
+!data/uploads/.gitkeep
+data/database/*
+!data/database/.gitkeep
+data/logs/
+data/vault/
+obsidian-vault/*
+!obsidian-vault/.gitkeep
+.npm-cache/
+*.log
+.DS_Store

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#5b4bdb">
+  <title>UniAi — Appunti AI per Obsidian</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="background-glow" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="UniAi home">
+      <span class="brand-mark">U</span>
+      <span>
+        <strong>UniAi</strong>
+        <small>Appunti → Obsidian</small>
+      </span>
+    </a>
+    <div class="topbar-actions">
+      <span id="provider-badge" class="badge badge-neutral">verifica provider…</span>
+      <button id="logout-btn" class="btn btn-ghost hidden" type="button">Esci</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Dalle foto alla conoscenza</p>
+        <h1>Trasforma gli appunti<br><span class="gradient-text">in note Obsidian collegate.</span></h1>
+        <p class="hero-copy">Carica le foto della lezione. UniAi le archivia sul server, le analizza con un modello visione/OCR e prepara una nota Markdown con frontmatter, tag e wikilink verificati.</p>
+      </div>
+      <div class="hero-stats" aria-label="Flusso di lavoro">
+        <div><strong>1</strong><span>Carica</span></div>
+        <div class="stat-arrow">→</div>
+        <div><strong>2</strong><span>Analizza</span></div>
+        <div class="stat-arrow">→</div>
+        <div><strong>3</strong><span>Salva nel vault</span></div>
+      </div>
+    </section>
+
+    <section class="panel upload-panel" aria-labelledby="upload-title">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Nuova lezione</p>
+          <h2 id="upload-title">Carica gli appunti</h2>
+        </div>
+        <span class="badge badge-soft">JPG · PNG · WebP · HEIC</span>
+      </div>
+
+      <form id="upload-form">
+        <label id="drop-zone" class="drop-zone" for="file-input" tabindex="0">
+          <input id="file-input" name="files" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" multiple hidden>
+          <span class="drop-icon" aria-hidden="true">+</span>
+          <strong>Trascina qui le foto o clicca per sceglierle</strong>
+          <span>Puoi caricare più pagine insieme. Max 10 file, 20 MB ciascuno.</span>
+        </label>
+        <div id="file-list" class="file-list" aria-live="polite"></div>
+
+        <div class="form-grid">
+          <label>Corso
+            <input name="course" type="text" placeholder="Es. Analisi Matematica II" maxlength="120">
+          </label>
+          <label>Data lezione
+            <input name="lesson_date" type="date">
+          </label>
+          <label>Titolo (opzionale)
+            <input name="title" type="text" placeholder="Es. Integrale doppio e coordinate polari" maxlength="160">
+          </label>
+          <label>Tag
+            <input name="tags" type="text" placeholder="es. integrali, esercizi, esame" maxlength="240">
+          </label>
+        </div>
+        <label>Istruzioni per l’AI (opzionale)
+          <textarea name="user_notes" rows="3" placeholder="Es. mantieni le formule, evidenzia le definizioni, crea un riassunto finale…" maxlength="2000"></textarea>
+        </label>
+
+        <div class="form-actions">
+          <button id="submit-upload" class="btn btn-primary" type="submit">
+            <span class="spinner hidden" aria-hidden="true"></span>
+            <span>Carica e analizza</span>
+          </button>
+          <span class="hint">Le immagini restano nella cartella upload del server.</span>
+        </div>
+      </form>
+    </section>
+
+    <section class="history-section" aria-labelledby="history-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Archivio</p>
+          <h2 id="history-title">Le tue elaborazioni</h2>
+        </div>
+        <button id="refresh-btn" class="btn btn-secondary" type="button">Aggiorna</button>
+      </div>
+
+      <div class="toolbar">
+        <label class="search-field">
+          <span class="sr-only">Cerca</span>
+          <input id="search-input" type="search" placeholder="Cerca per titolo, corso o testo…">
+        </label>
+        <select id="status-filter" aria-label="Filtra per stato">
+          <option value="">Tutti gli stati</option>
+          <option value="uploaded">In attesa</option>
+          <option value="processing">In elaborazione</option>
+          <option value="completed">Completati</option>
+          <option value="failed">Falliti</option>
+        </select>
+      </div>
+
+      <div id="jobs-list" class="jobs-list" aria-live="polite">
+        <div class="empty-state">Carica i tuoi primi appunti per iniziare.</div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="job-dialog" class="job-dialog">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">Dettaglio elaborazione</p>
+        <h2 id="dialog-title">Appunti</h2>
+        <span id="dialog-status" class="badge">—</span>
+      </div>
+      <button id="close-dialog" class="icon-btn" type="button" aria-label="Chiudi">×</button>
+    </div>
+    <div id="dialog-body" class="dialog-body"></div>
+  </dialog>
+
+  <div id="login-overlay" class="login-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <form id="login-form" class="login-card">
+      <span class="brand-mark large">U</span>
+      <h1 id="login-title">Accedi a UniAi</h1>
+      <p>Inserisci la password configurata sul server.</p>
+      <label>Password
+        <input id="login-password" type="password" autocomplete="current-password" required>
+      </label>
+      <button class="btn btn-primary" type="submit">Entra</button>
+      <p id="login-error" class="error-text" role="alert"></p>
+    </form>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+services:
+  uniai:
+    build: .
+    container_name: uniai
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      DATABASE_URL: sqlite:////app/data/database/uniai.db
+      UPLOAD_DIR: /app/data/uploads
+      OBSIDIAN_VAULT_PATH: /vault
+    volumes:
+      - ./data:/app/data
+      - ${OBSIDIAN_VAULT_PATH_HOST:-./obsidian-vault}:/vault

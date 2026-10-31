@@ -1,0 +1,20 @@
+{
+  "name": "uniai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Carica foto di appunti, analizzale con AI e salvale come note Markdown Obsidian.",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1",
+    "check": "node --check src/server.js && node --check src/app.js && node --check public/app.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
+  }
+}
