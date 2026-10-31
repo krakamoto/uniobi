@@ -197,7 +197,8 @@ export function createWorker({ config, store }) {
         const materializedNotes = await materializeFiguresForNotes({
           notes: preparedNotes,
           job,
-          config
+          config,
+          subjectPath: destinationSubjectPath
         });
         const saved = saveNotesToVault({
           vaultPath: config.vaultPath,

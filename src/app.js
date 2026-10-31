@@ -315,7 +315,8 @@ export function createApp({ config, store, worker }) {
       const materializedNotes = await materializeFiguresForNotes({
         notes: notesForSave,
         job,
-        config
+        config,
+        subjectPath: destinationSubjectPath
       });
       const saved = saveNotesToVault({
         vaultPath: config.vaultPath,

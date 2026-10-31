@@ -41,17 +41,19 @@ function normalizeBbox(value, metadata) {
   return { left, top, width: right - left, height: bottom - top };
 }
 
-function figureEmbed(config, fileName, caption) {
-  const relative = path.posix.join(config.obsidianAttachmentsDir, fileName);
+function figureEmbed(assetRelativePath, caption) {
+  const relative = assetRelativePath;
   const cleanCaption = String(caption || '').replace(/\s+/g, ' ').trim();
   return `![[${relative}]]${cleanCaption ? `\n*${cleanCaption}*` : ''}`;
 }
 
-export async function materializeFiguresForNotes({ notes, job, config }) {
+export async function materializeFiguresForNotes({ notes, job, config, subjectPath }) {
   const sourceFiles = (job.source_files || []).map((file) => path.resolve(config.uploadDir, file.relativePath));
-  const attachmentsDir = path.resolve(config.vaultPath, config.obsidianAttachmentsDir);
+  if (!subjectPath) throw new Error('Percorso materia mancante per gli allegati.');
+  const attachmentsRelative = path.posix.join(subjectPath, config.obsidianSubjectAttachmentsSubdir);
+  const attachmentsDir = path.resolve(config.vaultPath, attachmentsRelative);
   if (!isPathInside(config.vaultPath, attachmentsDir) && attachmentsDir !== path.resolve(config.vaultPath)) {
-    throw new Error('La cartella allegati configurata non è valida.');
+    throw new Error('La cartella allegati della materia non è valida.');
   }
   mkdirSync(attachmentsDir, { recursive: true });
 
@@ -91,7 +93,8 @@ export async function materializeFiguresForNotes({ notes, job, config }) {
           .extract(bbox)
           .png({ quality: 92 })
           .toFile(destination);
-        const embed = figureEmbed(config, fileName, caption);
+        const assetRelative = path.posix.join(attachmentsRelative, fileName);
+        const embed = figureEmbed(assetRelative, caption);
         const figId = String(figure.id || '').trim();
         const placeholderPatterns = figId
           ? [
@@ -111,7 +114,7 @@ export async function materializeFiguresForNotes({ notes, job, config }) {
         if (!placed) unplaced.push(embed);
         materializedFigures.push({
           ...figure,
-          assetPath: path.posix.join(config.obsidianAttachmentsDir, fileName),
+          assetPath: assetRelative,
           caption,
           embed
         });

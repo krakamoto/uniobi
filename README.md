@@ -120,7 +120,7 @@ Tutte le variabili sono documentate in `.env.example`:
 | `OBSIDIAN_NOTES_SUBDIR` | `Università/Lezioni` | Sottocartella di destinazione per materie non riconosciute |
 | `OBSIDIAN_SUBJECT_ROOTS` | vuota | Cartelle che contengono una sottocartella per ogni materia; separate da virgola |
 | `OBSIDIAN_NEW_SUBJECT_ROOT` | vuota | Cartella in cui creare le nuove materie |
-| `OBSIDIAN_ATTACHMENTS_DIR` | `Allegati/UniAi` | Cartella degli allegati generati, relativa al vault |
+| `OBSIDIAN_SUBJECT_ATTACHMENTS_SUBDIR` | `Allegati` | Sottocartella allegati creata dentro ogni materia |
 | `AUTO_SAVE_TO_VAULT` | `false` | Salva automaticamente al termine dell’analisi |
 | `ALLOW_CREATE_MISSING_WIKILINKS` | `false` | Consente wikilink verso note non ancora esistenti |
 | `AI_PROVIDER` | `mock` | `mock`, `gemini`, `openai`, `openai-compatible`, `openrouter`, `ollama` |
@@ -373,14 +373,27 @@ Al salvataggio nel vault, il backend usa `sharp` per:
 2. salvarla come PNG nella cartella configurata:
 
 ```env
-OBSIDIAN_ATTACHMENTS_DIR=uni/Allegati/UniAi
+OBSIDIAN_SUBJECT_ATTACHMENTS_SUBDIR=Allegati
 ```
 
-3. inserire nella nota l’embed Obsidian:
+3. creare automaticamente una cartella `Allegati` dentro la cartella della materia;
+4. inserire nella nota l’embed Obsidian:
 
 ```markdown
-![[uni/Allegati/UniAi/fig-...png]]
+![[uni/Uni/magistrale/nome-materia/Allegati/fig-...png]]
 *Didascalia della figura*
+```
+
+Esempio di struttura:
+
+```text
+uni/Uni/magistrale/aerospace dynamic systems analysis/
+├── 001 Introduzione.md
+├── 002 Architettura dei controlli.md
+├── _Indice.md
+└── Allegati/
+    ├── fig-...-n1-f1-schema.png
+    └── fig-...-n2-f1-grafico.png
 ```
 
 Le figure originali restano quindi fedeli e disponibili offline. Il prompt AI vieta esplicitamente di inventare URL o immagini esterne.

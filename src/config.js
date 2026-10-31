@@ -58,7 +58,7 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     notesSubdir,
     obsidianSubjectRoots: String(env.OBSIDIAN_SUBJECT_ROOTS || '').split(',').map((value) => value.trim()).filter(Boolean),
     obsidianNewSubjectRoot: String(env.OBSIDIAN_NEW_SUBJECT_ROOT || '').trim(),
-    obsidianAttachmentsDir: String(env.OBSIDIAN_ATTACHMENTS_DIR || 'Allegati/UniAi').replace(/^\/+|\/+$/g, ''),
+    obsidianSubjectAttachmentsSubdir: String(env.OBSIDIAN_SUBJECT_ATTACHMENTS_SUBDIR || 'Allegati').replace(/^\/+|\/+$/g, ''),
     maxUploadMb: number(env.MAX_UPLOAD_MB, 20),
     maxFilesPerUpload: number(env.MAX_FILES_PER_UPLOAD, 10),
     aiProvider: (env.AI_PROVIDER || 'mock').toLowerCase(),
