@@ -39,11 +39,13 @@ test('analisi del vault: riconosce materie, indici e mappe concettuali', () => {
 
     const map = readFileSync(path.join(subjectDir, '_Mappa concettuale.md'), 'utf8');
     assert.match(map, /```mermaid/);
-    assert.match(map, /N0/);
+    assert.match(map, /flowchart TD/);
+    assert.match(map, /Mappa concettuale semplificata/);
 
     const canvas = JSON.parse(readFileSync(path.join(subjectDir, '_Mappa concettuale.canvas'), 'utf8'));
-    assert.equal(canvas.nodes.length, 2);
-    assert.equal(canvas.edges.length, 1);
+    assert.ok(canvas.nodes.length >= 3);
+    assert.ok(canvas.edges.length >= 2);
+    assert.ok(canvas.nodes.some((node) => node.type === 'text'));
 
     writeFileSync(path.join(subjectDir, '02 integrali.md'), '# Integrali\n\n## Definizione\n\nArea sotto una curva.\n');
     const updated = rebuildArtifactsForFile(root, path.join(subjectDir, '02 integrali.md'), {

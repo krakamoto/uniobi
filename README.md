@@ -333,11 +333,11 @@ Contiene:
 
 ### `_Mappa concettuale.md`
 
-Contiene una mappa Mermaid generata dai wikilink tra note e dalla struttura delle cartelle. Obsidian la visualizza nativamente.
+Contiene una mappa Mermaid **semplificata** generata analizzando titoli, heading e contenuti delle note. Le note vengono raggruppate per similarità semantica in pochi nuclei concettuali; non è un grafo di tutti i wikilink.
 
 ### `_Mappa concettuale.canvas`
 
-È un Canvas Obsidian nativo con tutte le note della materia e le relative connessioni. Si può aprire, zoomare e trascinare.
+È un Canvas Obsidian nativo con il concetto centrale, le principali aree tematiche e alcune note rappresentative per ogni area. È volutamente sintetico; per l’elenco completo usa `_Indice.md`.
 
 ### Aggiornamento automatico
 
