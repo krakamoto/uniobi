@@ -236,6 +236,7 @@ L’app Android nativa si trova in `android/` e usa il backend UniAi come proxy 
 - fotocamera;
 - anteprima e rimozione delle immagini;
 - interfaccia Android a tab: Carica, Coda, Attività e Impostazioni;
+- tema chiaro, scuro o automatico di sistema;
 - pulsante impostazioni nella barra superiore;
 - gestione completa dei corsi: creazione, selezione, rinomina ed eliminazione;
 - revisione delle immagini selezionate con riordino e rimozione;
@@ -323,6 +324,32 @@ Nella schermata **Rete Wi-Fi** si può:
 - gestire l’elenco delle reti autorizzate.
 
 Se la rete non è fidata, la coda resta salvata localmente ma non viene inviata e nessuna richiesta viene fatta al server.
+
+## HTTPS e certificate pinning
+
+Il backend può servire direttamente HTTPS impostando:
+
+```env
+TLS_CERT_PATH=/percorso/fullchain.pem
+TLS_KEY_PATH=/percorso/privkey.pem
+COOKIE_SECURE=true
+```
+
+In alternativa usare Caddy o Nginx come reverse proxy TLS. È disponibile un esempio:
+
+```text
+deploy/Caddyfile.example
+```
+
+Per l’uso da rete esterna è consigliato Tailscale o WireGuard.
+
+L’app Android supporta un certificate pin SHA-256 opzionale:
+
+```text
+Impostazioni → Sicurezza TLS → SHA-256 del certificato
+```
+
+Il pin viene verificato contro il certificato foglia del server. Se il pin non corrisponde, la connessione viene rifiutata. Il pin non sostituisce la validazione normale della catena TLS: la integra.
 
 ## Sincronizzazione reale con Obsidian Mobile
 
@@ -589,6 +616,19 @@ npm test
 ```
 
 La suite verifica sanitizzazione dei percorsi, filtraggio dei wikilink, parsing del vault, provider Gemini con immagini inline e un flusso end-to-end completo: upload di un’immagine → analisi mock → salvataggio atomico in un vault temporaneo → verifica del contenuto e protezione dai duplicati.
+
+L’app Android include un test strumentale di smoke test per verificare la presenza delle tab e del pulsante impostazioni. Il test può essere compilato con:
+
+```bash
+cd android
+./gradlew assembleDebugAndroidTest
+```
+
+L’esecuzione su dispositivo richiede:
+
+```bash
+./gradlew connectedDebugAndroidTest
+```
 
 ## Docker
 

@@ -52,6 +52,8 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     port: number(env.PORT, 3000),
     appPassword: env.APP_PASSWORD || '',
     cookieSecure: bool(env.COOKIE_SECURE, false),
+    tlsCertPath: env.TLS_CERT_PATH ? path.resolve(projectRoot, env.TLS_CERT_PATH) : '',
+    tlsKeyPath: env.TLS_KEY_PATH ? path.resolve(projectRoot, env.TLS_KEY_PATH) : '',
     databasePath: resolveFrom(projectRoot, databaseRelative, './data/database/uniai.db'),
     uploadDir: resolveFrom(projectRoot, env.UPLOAD_DIR, './data/uploads'),
     vaultPath,

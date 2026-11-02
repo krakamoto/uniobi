@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.UniAi" parent="@android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.UniAi.Base" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#5B4BDB</item>
         <item name="android:windowBackground">#F7F5FC</item>
@@ -8,5 +8,19 @@
         <item name="android:navigationBarColor">#F7F5FC</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
+    </style>
+
+    <style name="Theme.UniAi" parent="Theme.UniAi.Base" />
+
+    <style name="Theme.UniAi.Light" parent="Theme.UniAi.Base" />
+
+    <style name="Theme.UniAi.Dark" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#9B8CFF</item>
+        <item name="android:windowBackground">#121119</item>
+        <item name="android:statusBarColor">#121119</item>
+        <item name="android:navigationBarColor">#121119</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>

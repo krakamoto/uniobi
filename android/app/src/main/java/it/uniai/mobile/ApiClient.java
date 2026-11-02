@@ -13,9 +13,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 
 final class ApiResponse {
     final int code;
@@ -59,6 +69,7 @@ final class UploadPart {
 final class ApiClient {
     private String baseUrl;
     private String cookie = "";
+    private String certificatePin = "";
 
     ApiClient(String baseUrl) {
         setBaseUrl(baseUrl);
@@ -85,6 +96,14 @@ final class ApiClient {
 
     void clearCookie() {
         cookie = "";
+    }
+
+    void setCertificatePin(String certificatePin) {
+        this.certificatePin = normalizePin(certificatePin);
+    }
+
+    String getCertificatePin() {
+        return certificatePin;
     }
 
     ApiResponse get(String path) throws IOException {
@@ -143,7 +162,63 @@ final class ApiClient {
         connection.setRequestProperty("Accept", "application/json");
         connection.setRequestProperty("User-Agent", "UniAi-Android/1.0");
         if (!cookie.isEmpty()) connection.setRequestProperty("Cookie", cookie);
+        if (connection instanceof HttpsURLConnection && !certificatePin.isEmpty()) {
+            applyCertificatePin((HttpsURLConnection) connection, certificatePin);
+        }
         return connection;
+    }
+
+    private static void applyCertificatePin(HttpsURLConnection connection, String expectedPin) throws IOException {
+        try {
+            TrustManagerFactory factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            factory.init((java.security.KeyStore) null);
+            X509TrustManager defaultTrustManager = null;
+            for (TrustManager manager : factory.getTrustManagers()) {
+                if (manager instanceof X509TrustManager) {
+                    defaultTrustManager = (X509TrustManager) manager;
+                    break;
+                }
+            }
+            if (defaultTrustManager == null) throw new IOException("Trust manager TLS non disponibile.");
+            final X509TrustManager delegate = defaultTrustManager;
+            X509TrustManager pinnedManager = new X509TrustManager() {
+                @Override
+                public void checkClientTrusted(X509Certificate[] chain, String authType) throws java.security.cert.CertificateException {
+                    delegate.checkClientTrusted(chain, authType);
+                }
+
+                @Override
+                public void checkServerTrusted(X509Certificate[] chain, String authType) throws java.security.cert.CertificateException {
+                    delegate.checkServerTrusted(chain, authType);
+                    if (chain == null || chain.length == 0) throw new java.security.cert.CertificateException("Certificato server assente.");
+                    try {
+                        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                        byte[] hash = digest.digest(chain[0].getEncoded());
+                        StringBuilder hex = new StringBuilder();
+                        for (byte value : hash) hex.append(String.format("%02x", value));
+                        if (!expectedPin.equalsIgnoreCase(hex.toString())) {
+                            throw new java.security.cert.CertificateException("Certificate pin non valido.");
+                        }
+                    } catch (java.security.NoSuchAlgorithmException error) {
+                        throw new java.security.cert.CertificateException(error);
+                    }
+                }
+
+                @Override
+                public X509Certificate[] getAcceptedIssuers() {
+                    return delegate.getAcceptedIssuers();
+                }
+            };
+            SSLContext context = SSLContext.getInstance("TLS");
+            context.init(null, new TrustManager[]{pinnedManager}, new SecureRandom());
+            connection.setSSLSocketFactory(context.getSocketFactory());
+        } catch (Exception error) {
+            throw new IOException("Impossibile applicare il certificate pin: " + error.getMessage(), error);
+        }
+    }
+
+    private static String normalizePin(String value) {
+        return String.valueOf(value == null ? "" : value).replaceAll("[^0-9A-Fa-f]", "").toLowerCase();
     }
 
     private ApiResponse request(String method, String path, byte[] body, String contentType, boolean multipart) throws IOException {

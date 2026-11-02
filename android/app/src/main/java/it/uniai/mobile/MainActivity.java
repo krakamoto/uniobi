@@ -70,14 +70,19 @@ public class MainActivity extends Activity {
     private static final int TAB_QUEUE = 1;
     private static final int TAB_ACTIVITY = 2;
     private static final int TAB_SETTINGS = 3;
-    private static final int PRIMARY = Color.rgb(91, 75, 219);
-    private static final int PRIMARY_DARK = Color.rgb(68, 54, 184);
-    private static final int TEXT = Color.rgb(23, 21, 42);
-    private static final int MUTED = Color.rgb(104, 100, 126);
-    private static final int SUCCESS = Color.rgb(17, 122, 85);
-    private static final int WARNING = Color.rgb(162, 100, 0);
-    private static final int DANGER = Color.rgb(179, 52, 79);
-    private static final int BG = Color.rgb(247, 245, 252);
+    private int PRIMARY;
+    private int PRIMARY_DARK;
+    private int TEXT;
+    private int MUTED;
+    private int SUCCESS;
+    private int WARNING;
+    private int DANGER;
+    private int BG;
+    private int SURFACE;
+    private int SURFACE_ALT;
+    private int INPUT_BG;
+    private int BORDER;
+    private int ON_PRIMARY;
 
     private final List<UploadPart> selectedFiles = new ArrayList<>();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -96,6 +101,7 @@ public class MainActivity extends Activity {
     private Uri cameraOutputUri;
 
     private EditText serverUrlInput;
+    private EditText certPinInput;
     private EditText passwordInput;
     private Spinner courseSpinner;
     private ArrayAdapter<String> courseAdapter;
@@ -137,10 +143,15 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("uniai", Context.MODE_PRIVATE);
+        String savedTheme = prefs.getString("theme_mode", "system");
+        if ("dark".equals(savedTheme)) setTheme(R.style.Theme_UniAi_Dark);
+        else if ("light".equals(savedTheme)) setTheme(R.style.Theme_UniAi_Light);
+        super.onCreate(savedInstanceState);
+        applyPalette();
         api = new ApiClient(prefs.getString("server_url", "http://10.0.2.2:3000"));
         api.setCookie(prefs.getString("session_cookie", ""));
+        api.setCertificatePin(prefs.getString("server_cert_pin", ""));
         UploadQueueStore.requeueUploading(this);
         buildUi();
         loadCourses();
@@ -218,9 +229,11 @@ public class MainActivity extends Activity {
         settingsTab.addView(text("Server, sicurezza della rete e accesso.", 13, MUTED, Typeface.NORMAL), matchTop(dp(4)));
         settingsTab.addView(networkCard(), matchTop(dp(14)));
         settingsTab.addView(serverCard(), matchTop(dp(12)));
+        settingsTab.addView(tlsCard(), matchTop(dp(12)));
         loginCard = loginCard();
         loginCard.setVisibility(View.GONE);
         settingsTab.addView(loginCard, matchTop(dp(12)));
+        settingsTab.addView(themeCard(), matchTop(dp(12)));
         settingsTab.addView(infoCard(), matchTop(dp(12)));
 
         appRoot.addView(buildBottomNavigation(), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -235,7 +248,7 @@ public class MainActivity extends Activity {
         bar.setPadding(dp(18), dp(12), dp(10), dp(8));
         bar.setBackgroundColor(BG);
 
-        TextView mark = text("U", 19, Color.WHITE, Typeface.BOLD);
+        TextView mark = text("U", 19, ON_PRIMARY, Typeface.BOLD);
         mark.setGravity(Gravity.CENTER);
         GradientDrawable markBg = new GradientDrawable();
         markBg.setColor(PRIMARY);
@@ -282,8 +295,8 @@ public class MainActivity extends Activity {
         nav.setGravity(Gravity.CENTER);
         nav.setPadding(dp(8), dp(5), dp(8), dp(7));
         GradientDrawable background = new GradientDrawable();
-        background.setColor(Color.WHITE);
-        background.setStroke(dp(1), Color.argb(24, 36, 30, 80));
+        background.setColor(SURFACE);
+        background.setStroke(dp(1), BORDER);
         nav.setBackground(background);
 
         tabItems = new LinearLayout[4];
@@ -331,6 +344,94 @@ public class MainActivity extends Activity {
         if (index == TAB_ACTIVITY) loadJobs(true);
         if (index == TAB_SETTINGS) refreshNetworkStatus();
         if (index == TAB_QUEUE) refreshQueueStatus();
+    }
+
+    private boolean isDarkMode() {
+        String mode = prefs.getString("theme_mode", "system");
+        if ("dark".equals(mode)) return true;
+        if ("light".equals(mode)) return false;
+        int nightMode = getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+        return nightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    private void applyPalette() {
+        if (isDarkMode()) {
+            BG = Color.rgb(18, 17, 25);
+            SURFACE = Color.rgb(29, 26, 39);
+            SURFACE_ALT = Color.rgb(39, 35, 52);
+            INPUT_BG = Color.rgb(34, 30, 45);
+            TEXT = Color.rgb(244, 241, 255);
+            MUTED = Color.rgb(181, 175, 201);
+            PRIMARY = Color.rgb(155, 140, 255);
+            PRIMARY_DARK = Color.rgb(184, 172, 255);
+            SUCCESS = Color.rgb(94, 212, 168);
+            WARNING = Color.rgb(255, 199, 102);
+            DANGER = Color.rgb(255, 143, 163);
+            BORDER = Color.argb(45, 255, 255, 255);
+            ON_PRIMARY = Color.rgb(20, 16, 32);
+        } else {
+            BG = Color.rgb(247, 245, 252);
+            SURFACE = Color.WHITE;
+            SURFACE_ALT = Color.rgb(242, 240, 250);
+            INPUT_BG = Color.rgb(252, 251, 255);
+            TEXT = Color.rgb(23, 21, 42);
+            MUTED = Color.rgb(104, 100, 126);
+            PRIMARY = Color.rgb(91, 75, 219);
+            PRIMARY_DARK = Color.rgb(68, 54, 184);
+            SUCCESS = Color.rgb(17, 122, 85);
+            WARNING = Color.rgb(162, 100, 0);
+            DANGER = Color.rgb(179, 52, 79);
+            BORDER = Color.argb(24, 36, 30, 80);
+            ON_PRIMARY = Color.WHITE;
+        }
+    }
+
+    private int withAlpha(int color, int alpha) {
+        return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
+    }
+
+    private View tlsCard() {
+        LinearLayout card = card();
+        card.addView(text("Sicurezza TLS", 17, TEXT, Typeface.BOLD));
+        card.addView(text("Opzionale. Per HTTPS puoi fissare l'impronta SHA-256 del certificato del server. Incolla solo i caratteri esadecimali.", 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+        certPinInput = editText("SHA-256 del certificato", InputType.TYPE_CLASS_TEXT);
+        certPinInput.setText(prefs.getString("server_cert_pin", ""));
+        card.addView(certPinInput, matchTop(dp(10)));
+        Button save = secondaryButton("Salva certificate pin");
+        save.setOnClickListener(view -> {
+            String pin = certPinInput.getText().toString().replaceAll("[^0-9A-Fa-f]", "").toLowerCase();
+            prefs.edit().putString("server_cert_pin", pin).apply();
+            api.setCertificatePin(pin);
+            toast(pin.isEmpty() ? "Certificate pin rimosso." : "Certificate pin salvato.");
+        });
+        card.addView(save, matchTop(dp(8)));
+        return card;
+    }
+
+    private View themeCard() {
+        LinearLayout card = card();
+        card.addView(text("Aspetto", 17, TEXT, Typeface.BOLD));
+        String mode = prefs.getString("theme_mode", "system");
+        String label = "system".equals(mode) ? "Segue il sistema" : ("dark".equals(mode) ? "Tema scuro" : "Tema chiaro");
+        TextView current = text("Tema attuale: " + label, 12, MUTED, Typeface.NORMAL);
+        card.addView(current, matchTop(dp(4)));
+        Button change = secondaryButton("Cambia tema");
+        change.setOnClickListener(view -> {
+            String[] themes = {"Segui il sistema", "Chiaro", "Scuro"};
+            String[] values = {"system", "light", "dark"};
+            int selected = "dark".equals(mode) ? 2 : ("light".equals(mode) ? 1 : 0);
+            new AlertDialog.Builder(this)
+                .setTitle("Tema dell'app")
+                .setSingleChoiceItems(themes, selected, (dialog, which) -> {
+                    prefs.edit().putString("theme_mode", values[which]).apply();
+                    dialog.dismiss();
+                    recreate();
+                })
+                .setNegativeButton("Annulla", null)
+                .show();
+        });
+        card.addView(change, matchTop(dp(10)));
+        return card;
     }
 
     private View infoCard() {
@@ -489,7 +590,7 @@ public class MainActivity extends Activity {
 
             ImageView image = new ImageView(this);
             image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            image.setBackgroundColor(Color.rgb(238, 235, 248));
+            image.setBackgroundColor(SURFACE_ALT);
             image.setContentDescription("Anteprima " + (index + 1));
             image.setOnClickListener(view -> showReviewImagesDialog());
             try {
@@ -498,7 +599,7 @@ public class MainActivity extends Activity {
             }
             frame.addView(image, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-            TextView remove = text("×", 18, Color.WHITE, Typeface.BOLD);
+            TextView remove = text("×", 18, ON_PRIMARY, Typeface.BOLD);
             remove.setGravity(Gravity.CENTER);
             GradientDrawable removeBg = new GradientDrawable();
             removeBg.setColor(Color.argb(190, 20, 16, 45));
@@ -1128,7 +1229,7 @@ public class MainActivity extends Activity {
             row.setOrientation(LinearLayout.VERTICAL);
             row.setPadding(dp(10), dp(9), dp(10), dp(9));
             GradientDrawable background = new GradientDrawable();
-            background.setColor(Color.rgb(247, 245, 255));
+            background.setColor(SURFACE_ALT);
             background.setCornerRadius(dp(10));
             row.setBackground(background);
             row.addView(text(displayTitle, 13, TEXT, Typeface.BOLD));
@@ -1523,7 +1624,7 @@ public class MainActivity extends Activity {
         String error = job.optString("error", "");
         if (!error.isEmpty()) {
             TextView errorView = text(error, 13, DANGER, Typeface.NORMAL);
-            errorView.setBackgroundColor(Color.rgb(255, 233, 238));
+            errorView.setBackgroundColor(withAlpha(DANGER, 32));
             errorView.setPadding(dp(10), dp(10), dp(10), dp(10));
             content.addView(errorView, matchTop(dp(10)));
         }
@@ -1533,7 +1634,7 @@ public class MainActivity extends Activity {
             StringBuilder warningText = new StringBuilder("Da verificare:\n");
             for (int i = 0; i < warnings.length(); i++) warningText.append("• ").append(warnings.optString(i)).append("\n");
             TextView warningView = text(warningText.toString().trim(), 12, WARNING, Typeface.NORMAL);
-            warningView.setBackgroundColor(Color.rgb(255, 244, 216));
+            warningView.setBackgroundColor(withAlpha(WARNING, 34));
             warningView.setPadding(dp(10), dp(10), dp(10), dp(10));
             content.addView(warningView, matchTop(dp(10)));
         }
@@ -1565,7 +1666,7 @@ public class MainActivity extends Activity {
                 String noteMarkdown = note.optString("markdown", "");
                 if (!noteMarkdown.isEmpty()) {
                     TextView preview = text(simpleMarkdownPreview(noteMarkdown), 12, TEXT, Typeface.NORMAL);
-                    preview.setBackgroundColor(Color.WHITE);
+                    preview.setBackgroundColor(SURFACE_ALT);
                     preview.setPadding(dp(10), dp(8), dp(10), dp(8));
                     content.addView(preview, matchTop(dp(6)));
                 }
@@ -1583,13 +1684,13 @@ public class MainActivity extends Activity {
             editor.setGravity(Gravity.TOP);
             editor.setMinLines(12);
             editor.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-            editor.setBackgroundColor(Color.WHITE);
+            editor.setBackgroundColor(SURFACE_ALT);
             editor.setPadding(dp(10), dp(10), dp(10), dp(10));
             content.addView(editor, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(300)));
 
             content.addView(text("Anteprima", 13, TEXT, Typeface.BOLD), matchTop(dp(12)));
             TextView preview = text(simpleMarkdownPreview(markdown), 13, TEXT, Typeface.NORMAL);
-            preview.setBackgroundColor(Color.WHITE);
+            preview.setBackgroundColor(SURFACE_ALT);
             preview.setPadding(dp(10), dp(10), dp(10), dp(10));
             content.addView(preview, matchTop(dp(6)));
         }
@@ -1679,9 +1780,9 @@ public class MainActivity extends Activity {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(16), dp(16), dp(16), dp(16));
         GradientDrawable background = new GradientDrawable();
-        background.setColor(Color.WHITE);
+        background.setColor(SURFACE);
         background.setCornerRadius(dp(18));
-        background.setStroke(dp(1), Color.argb(24, 36, 30, 80));
+        background.setStroke(dp(1), BORDER);
         layout.setBackground(background);
         layout.setElevation(dp(2));
         return layout;
@@ -1702,7 +1803,7 @@ public class MainActivity extends Activity {
         input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         input.setInputType(inputType);
         input.setSingleLine(!((inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0));
-        input.setBackgroundColor(Color.rgb(252, 251, 255));
+        input.setBackgroundColor(INPUT_BG);
         input.setPadding(dp(11), dp(10), dp(11), dp(10));
         return input;
     }
@@ -1731,7 +1832,7 @@ public class MainActivity extends Activity {
         Button button = new Button(this);
         button.setText(label);
         button.setAllCaps(false);
-        button.setTextColor(Color.WHITE);
+        button.setTextColor(ON_PRIMARY);
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         button.setTypeface(Typeface.DEFAULT_BOLD);
         button.setBackgroundTintList(ColorStateList.valueOf(PRIMARY));
@@ -1746,7 +1847,7 @@ public class MainActivity extends Activity {
         button.setTextColor(PRIMARY_DARK);
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         button.setTypeface(Typeface.DEFAULT_BOLD);
-        button.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(238, 235, 255)));
+        button.setBackgroundTintList(ColorStateList.valueOf(withAlpha(PRIMARY, 36)));
         button.setMinHeight(dp(46));
         return button;
     }
@@ -1780,10 +1881,10 @@ public class MainActivity extends Activity {
 
     private int statusBackground(String status) {
         switch (status) {
-            case "completed": return Color.rgb(227, 248, 239);
-            case "processing": return Color.rgb(255, 244, 216);
-            case "failed": return Color.rgb(255, 233, 238);
-            default: return Color.rgb(238, 236, 246);
+            case "completed": return withAlpha(SUCCESS, 34);
+            case "processing": return withAlpha(WARNING, 34);
+            case "failed": return withAlpha(DANGER, 34);
+            default: return withAlpha(MUTED, 28);
         }
     }
 

@@ -87,6 +87,7 @@ public class UploadJobService extends JobService {
         SharedPreferences prefs = getSharedPreferences("uniai", MODE_PRIVATE);
         ApiClient api = new ApiClient(prefs.getString("server_url", "http://10.0.2.2:3000"));
         api.setCookie(prefs.getString("session_cookie", ""));
+        api.setCertificatePin(prefs.getString("server_cert_pin", ""));
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("course", item.optString("course", ""));
         fields.put("lesson_date", item.optString("lesson_date", ""));
