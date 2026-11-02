@@ -34,6 +34,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
@@ -119,6 +120,8 @@ public class MainActivity extends Activity {
     private ProgressBar uploadProgress;
     private LinearLayout networkPanel;
     private TextView networkStatusView;
+    private CheckBox networkCompatibilityCheck;
+    private TextView serverTestStatus;
     private Button networkActionButton;
     private Button networkManageButton;
     private LinearLayout queuePanel;
@@ -453,6 +456,11 @@ public class MainActivity extends Activity {
         Button connect = primaryButton("Salva e connetti");
         connect.setOnClickListener(view -> saveServerAndConnect());
         card.addView(connect, matchTop(dp(10)));
+        Button test = secondaryButton("Verifica connessione server");
+        test.setOnClickListener(view -> testServerConnection());
+        card.addView(test, matchTop(dp(8)));
+        serverTestStatus = text("", 12, MUTED, Typeface.NORMAL);
+        card.addView(serverTestStatus, matchTop(dp(6)));
         return card;
     }
 
@@ -729,6 +737,23 @@ public class MainActivity extends Activity {
         networkPanel.addView(text("Per proteggere foto e sessione, l'app contatta il server solo da reti Wi-Fi che hai autorizzato.", 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
         networkStatusView = text("Verifica rete…", 13, MUTED, Typeface.NORMAL);
         networkPanel.addView(networkStatusView, matchTop(dp(10)));
+        networkCompatibilityCheck = new CheckBox(this);
+        networkCompatibilityCheck.setText("Modalità compatibilità rete locale");
+        networkCompatibilityCheck.setTextColor(MUTED);
+        networkCompatibilityCheck.setContentDescription("Consenti connessione al server su Wi-Fi locale senza identificazione SSID");
+        networkCompatibilityCheck.setChecked(TrustedNetworkManager.isCompatibilityMode(this));
+        networkCompatibilityCheck.setOnCheckedChangeListener((button, checked) -> {
+            TrustedNetworkManager.setCompatibilityMode(this, checked);
+            refreshNetworkStatus();
+            if (checked) {
+                toast("Compatibilità attiva: il server verrà contattato su qualsiasi Wi-Fi locale. Usa HTTPS o VPN per la massima sicurezza.");
+                if (serverNetworkAllowed(false)) {
+                    UploadScheduler.schedule(this);
+                    checkServerAndAuth();
+                }
+            }
+        });
+        networkPanel.addView(networkCompatibilityCheck, matchTop(dp(4)));
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
@@ -753,7 +778,13 @@ public class MainActivity extends Activity {
         String label = TrustedNetworkManager.currentNetworkLabel(this);
         if (topStatusView != null) {
             boolean trusted = TrustedNetworkManager.isOnVpn(this) || TrustedNetworkManager.isCurrentNetworkTrusted(this);
-            topStatusView.setText(trusted ? "Rete sicura" : "Rete non autorizzata");
+            if (TrustedNetworkManager.isCompatibilityMode(this)) {
+                topStatusView.setText("Compatibilità rete attiva");
+                topStatusView.setTextColor(WARNING);
+            } else {
+                topStatusView.setText(trusted ? "Rete sicura" : "Rete non autorizzata");
+                topStatusView.setTextColor(trusted ? SUCCESS : WARNING);
+            }
             topStatusView.setTextColor(trusted ? SUCCESS : WARNING);
         }
         networkStatusView.setText("Rete attuale: " + label
@@ -1263,6 +1294,35 @@ public class MainActivity extends Activity {
             }
             queueItemsContainer.addView(row, matchTop(dp(8)));
         }
+    }
+
+    private void testServerConnection() {
+        if (!serverNetworkAllowed(true)) {
+            if (serverTestStatus != null) serverTestStatus.setText("Connessione bloccata dal controllo rete.");
+            return;
+        }
+        if (serverTestStatus != null) serverTestStatus.setText("Verifica connessione…");
+        executor.execute(() -> {
+            try {
+                ApiResponse response = api.get("/api/health");
+                runOnUiThread(() -> {
+                    if (response.isOk()) {
+                        String model = "";
+                        try { model = new JSONObject(response.body).optString("aiModel", ""); } catch (Exception ignored) {}
+                        serverTestStatus.setText("Server raggiungibile · HTTP " + response.code + (model.isEmpty() ? "" : " · " + model));
+                        serverTestStatus.setTextColor(SUCCESS);
+                    } else {
+                        serverTestStatus.setText("Server risponde HTTP " + response.code + ": " + response.errorMessage());
+                        serverTestStatus.setTextColor(DANGER);
+                    }
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> {
+                    serverTestStatus.setText("Connessione fallita: " + safeMessage(error));
+                    serverTestStatus.setTextColor(DANGER);
+                });
+            }
+        });
     }
 
     private void saveServerAndConnect() {

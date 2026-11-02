@@ -27,6 +27,7 @@ final class TrustedNetworkManager {
     private static final String PREFS = "uniai";
     private static final String KEY_TRUSTED_SSIDS = "trusted_wifi_ssids";
     private static final String KEY_TRUSTED_FINGERPRINTS = "trusted_wifi_fingerprints";
+    private static final String KEY_COMPATIBILITY_MODE = "network_compatibility_mode";
     private static final String KEY_LOCATION_PROMPTED = "wifi_location_prompted";
 
     private TrustedNetworkManager() {
@@ -228,10 +229,19 @@ final class TrustedNetworkManager {
         return !ssid.isEmpty() && trustedSsids(context).contains(ssid);
     }
 
+    static boolean isCompatibilityMode(Context context) {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_COMPATIBILITY_MODE, false);
+    }
+
+    static void setCompatibilityMode(Context context, boolean enabled) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_COMPATIBILITY_MODE, enabled).apply();
+    }
+
     static boolean canContactServer(Context context, String baseUrl) {
         String host = hostFromUrl(baseUrl);
         if (host.equals("10.0.2.2") || host.equals("127.0.0.1") || host.equals("localhost")) return true;
         if (!isHttps(baseUrl) && !isPrivateHost(host)) return false;
+        if (isCompatibilityMode(context) && isOnWifi(context)) return true;
         if (isOnVpn(context)) return true;
         return isCurrentNetworkTrusted(context);
     }
@@ -242,6 +252,7 @@ final class TrustedNetworkManager {
         if (!isHttps(baseUrl) && !isPrivateHost(host)) {
             return "HTTP è consentito solo verso server locali. Configura HTTPS o usa una VPN.";
         }
+        if (isCompatibilityMode(context) && isOnWifi(context)) return "";
         if (isOnVpn(context)) return "";
         if (!hasFineLocationPermission(context)) return "Concedi il permesso di posizione precisa.";
         if (!hasNearbyWifiPermission(context)) return "Concedi il permesso Dispositivi Wi-Fi vicini (Android 13+).";
