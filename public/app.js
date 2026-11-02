@@ -269,6 +269,7 @@ function renderDialog(job) {
         ${multiNote ? '' : '<button id="copy-markdown" class="btn btn-secondary" type="button">Copia Markdown</button>'}
         ${multiNote ? '' : '<button id="save-edits" class="btn btn-secondary" type="button">Salva modifiche</button>'}
         <button id="save-vault" class="btn btn-primary" type="button" ${isSaved ? 'disabled' : ''}>Salva ${multiNote ? 'le note' : 'nel vault Obsidian'}</button>
+        <button id="delete-job" class="btn btn-danger" type="button">Elimina attività</button>
         ${isSaved ? `<span class="saved-banner">${multiNote ? `${(job.vault_paths || []).length || generatedNotes.length} note salvate nel vault` : `Già salvata in: ${escapeHtml(job.vault_path)}`}</span>` : ''}
       </div>`;
   } else if (job.status === 'failed') {
@@ -280,6 +281,7 @@ function renderDialog(job) {
       ${errorHtml}
       <div class="dialog-actions">
         <button id="retry-job" class="btn btn-primary" type="button">Riprova elaborazione</button>
+        <button id="delete-job" class="btn btn-danger" type="button">Elimina attività</button>
       </div>`;
   } else {
     content = `
@@ -307,6 +309,7 @@ function renderDialog(job) {
   $('#save-edits')?.addEventListener('click', () => saveMarkdown(job.id));
   $('#save-vault')?.addEventListener('click', () => saveToVault(job.id));
   $('#retry-job')?.addEventListener('click', () => retryJob(job.id));
+  $('#delete-job')?.addEventListener('click', () => deleteJob(job.id));
 }
 
 async function openJob(id) {
@@ -365,6 +368,19 @@ async function saveToVault(jobId) {
   } catch (error) {
     showToast(error.message, 'error');
     button.disabled = false;
+  }
+}
+
+async function deleteJob(jobId) {
+  if (!window.confirm('Eliminare questa attività?\n\nVerranno rimosse le note generate, le figure ritagliate e le immagini caricate. Le note già salvate nel vault verranno cancellate automaticamente.')) return;
+  try {
+    const data = await api(`/api/jobs/${jobId}`, { method: 'DELETE' });
+    showToast(data.message || 'Attività eliminata.', 'success');
+    clearInterval(state.detailTimer);
+    if ($('#job-dialog').open) $('#job-dialog').close();
+    await loadJobs({ silent: true });
+  } catch (error) {
+    showToast(error.message, 'error');
   }
 }
 

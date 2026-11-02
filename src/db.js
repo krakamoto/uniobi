@@ -102,6 +102,8 @@ export function createStore(databasePath) {
       VALUES (?, ?, ?, ?, ?, ?)
     `),
     vaultFilesByJob: db.prepare('SELECT * FROM vault_files WHERE job_id = ?'),
+    deleteVaultFilesByJob: db.prepare('DELETE FROM vault_files WHERE job_id = ?'),
+    deleteJob: db.prepare('DELETE FROM jobs WHERE id = ?'),
     interrupted: db.prepare("SELECT id FROM jobs WHERE status = 'processing'")
   };
 
@@ -182,6 +184,19 @@ export function createStore(databasePath) {
     return statements.vaultFilesByJob.all(jobId);
   }
 
+  function deleteJobCascade(jobId) {
+    db.exec('BEGIN');
+    try {
+      statements.deleteVaultFilesByJob.run(jobId);
+      const result = statements.deleteJob.run(jobId);
+      db.exec('COMMIT');
+      return Number(result.changes || 0) > 0;
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   function listInterrupted() {
     return statements.interrupted.all();
   }
@@ -200,6 +215,7 @@ export function createStore(databasePath) {
     stats,
     insertVaultFile,
     getVaultFiles,
+    deleteJobCascade,
     listInterrupted,
     close
   };

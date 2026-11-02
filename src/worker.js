@@ -265,6 +265,13 @@ export function createWorker({ config, store }) {
     kick();
   }
 
+  function remove(jobId) {
+    enqueued.delete(jobId);
+    for (let i = queue.length - 1; i >= 0; i -= 1) {
+      if (queue[i] === jobId) queue.splice(i, 1);
+    }
+  }
+
   async function waitForIdle() {
     while (running || queue.length > 0) {
       if (activePromise) await activePromise;
@@ -272,5 +279,5 @@ export function createWorker({ config, store }) {
     }
   }
 
-  return { enqueue, processJob, waitForIdle };
+  return { enqueue, remove, processJob, waitForIdle };
 }

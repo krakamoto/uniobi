@@ -1262,8 +1262,8 @@ public class MainActivity extends Activity {
             if (item == null) continue;
             String id = item.optString("id", "");
             String status = item.optString("status", "pending");
-            String course = item.optString("course", "");
-            String title = item.optString("title", "");
+            String course = jsonString(item, "course");
+            String title = jsonString(item, "title");
             int fileCount = item.optJSONArray("files") == null ? 0 : item.optJSONArray("files").length();
             String displayTitle = !title.isEmpty() ? title : (!course.isEmpty() ? course : "Appunti");
             if (!course.isEmpty() && !title.isEmpty()) displayTitle = title + " · " + course;
@@ -1278,7 +1278,7 @@ public class MainActivity extends Activity {
             row.addView(text(displayTitle, 13, TEXT, Typeface.BOLD));
             String statusLabel = "pending".equals(status) ? "In attesa di rete/server" : ("uploading".equals(status) ? "Caricamento in corso" : "Fallito");
             row.addView(text(fileCount + (fileCount == 1 ? " immagine" : " immagini") + " · " + statusLabel, 11, "failed".equals(status) ? DANGER : MUTED, Typeface.NORMAL), matchTop(dp(3)));
-            String error = item.optString("error", "");
+            String error = jsonString(item, "error");
             if (!error.isEmpty()) row.addView(text(error, 11, DANGER, Typeface.NORMAL), matchTop(dp(3)));
 
             if (!"uploading".equals(status)) {
@@ -1625,7 +1625,7 @@ public class MainActivity extends Activity {
             top.setOrientation(LinearLayout.HORIZONTAL);
             top.setGravity(Gravity.CENTER_VERTICAL);
 
-            String jobTitle = firstNonEmpty(job.optString("result_title"), job.optString("requested_title"), job.optString("course"), "Elaborazione senza titolo");
+            String jobTitle = firstNonEmpty(jsonString(job, "result_title"), jsonString(job, "requested_title"), jsonString(job, "course"), "Elaborazione senza titolo");
             TextView name = text(jobTitle, 16, TEXT, Typeface.BOLD);
             top.addView(name, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             String status = job.optString("status", "uploaded");
@@ -1633,14 +1633,14 @@ public class MainActivity extends Activity {
             top.addView(badge);
             row.addView(top);
 
-            String course = job.optString("course", "");
-            String date = job.optString("lesson_date", "");
+            String course = jsonString(job, "course");
+            String date = jsonString(job, "lesson_date");
             int noteCount = job.optInt("note_count", 1);
             String meta = (course.isEmpty() ? "Corso non indicato" : course)
                 + (date.isEmpty() ? "" : " · " + date)
                 + (noteCount > 1 ? " · " + noteCount + " note" : "");
             row.addView(text(meta, 12, MUTED, Typeface.NORMAL), matchTop(dp(5)));
-            String error = job.optString("error", "");
+            String error = jsonString(job, "error");
             if (!error.isEmpty()) row.addView(text(error, 12, DANGER, Typeface.NORMAL), matchTop(dp(5)));
 
             String id = job.optString("id", "");
@@ -1681,7 +1681,7 @@ public class MainActivity extends Activity {
         boolean multiNote = generatedNotes != null && generatedNotes.length() > 1;
         String title = resultJson == null
             ? firstNonEmpty(job.optString("requested_title"), job.optString("course"), "Dettaglio elaborazione")
-            : resultJson.optString("title", firstNonEmpty(job.optString("requested_title"), job.optString("course"), "Dettaglio elaborazione"));
+            : firstNonEmpty(jsonString(resultJson, "title"), jsonString(job, "requested_title"), jsonString(job, "course"), "Dettaglio elaborazione");
 
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -1690,10 +1690,11 @@ public class MainActivity extends Activity {
         TextView statusView = badge(statusLabel(status), statusColor(status), statusBackground(status));
         content.addView(statusView);
 
-        content.addView(text(firstNonEmpty(job.optString("course", ""), "Corso non indicato"), 16, TEXT, Typeface.BOLD), matchTop(dp(10)));
-        content.addView(text("Data: " + firstNonEmpty(job.optString("lesson_date", ""), "non indicata"), 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+        content.addView(text(firstNonEmpty(jsonString(job, "course"), "Corso non indicato"), 16, TEXT, Typeface.BOLD), matchTop(dp(10)));
+        String lessonDate = jsonString(job, "lesson_date");
+        content.addView(text("Data: " + (lessonDate.isEmpty() ? "non indicata" : lessonDate), 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
 
-        String error = job.optString("error", "");
+        String error = jsonString(job, "error");
         if (!error.isEmpty()) {
             TextView errorView = text(error, 13, DANGER, Typeface.NORMAL);
             errorView.setBackgroundColor(withAlpha(DANGER, 32));
@@ -1745,7 +1746,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        String markdown = job.optString("markdown", "");
+        String markdown = jsonString(job, "markdown");
         EditText editor = null;
         if (!multiNote && !markdown.isEmpty()) {
             content.addView(text("Markdown modificabile", 13, TEXT, Typeface.BOLD), matchTop(dp(14)));
@@ -1765,6 +1766,13 @@ public class MainActivity extends Activity {
             preview.setBackgroundColor(SURFACE_ALT);
             preview.setPadding(dp(10), dp(10), dp(10), dp(10));
             content.addView(preview, matchTop(dp(6)));
+        }
+
+        if (!"processing".equals(status)) {
+            Button deleteActivity = smallButton("Elimina attività");
+            deleteActivity.setTextColor(DANGER);
+            deleteActivity.setOnClickListener(view -> confirmDeleteActivity(id));
+            content.addView(deleteActivity, matchTop(dp(16)));
         }
 
         ScrollView dialogScroll = new ScrollView(this);
@@ -1824,6 +1832,32 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     toast(message);
                     loadJobs(true);
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> toast(safeMessage(error)));
+            }
+        });
+    }
+
+    private void confirmDeleteActivity(String jobId) {
+        new AlertDialog.Builder(this)
+            .setTitle("Eliminare l'attività?")
+            .setMessage("Verranno eliminate la nota generata, le figure ritagliate e le immagini caricate. Le note già salvate nel vault verranno rimosse automaticamente. L'operazione non può essere annullata.")
+            .setNegativeButton("Annulla", null)
+            .setPositiveButton("Elimina", (dialog, which) -> deleteActivity(jobId))
+            .show();
+    }
+
+    private void deleteActivity(String jobId) {
+        if (!serverNetworkAllowed(true)) return;
+        executor.execute(() -> {
+            try {
+                ApiResponse response = api.delete("/api/jobs/" + jobId);
+                if (!response.isOk()) throw new IOException(response.errorMessage());
+                runOnUiThread(() -> {
+                    toast("Attività eliminata.");
+                    loadJobs(true);
+                    refreshQueueStatus();
                 });
             } catch (Exception error) {
                 runOnUiThread(() -> toast(safeMessage(error)));
@@ -1982,6 +2016,12 @@ public class MainActivity extends Activity {
 
     private void toast(String message) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    }
+
+    private String jsonString(JSONObject object, String key) {
+        if (object == null || object.isNull(key)) return "";
+        String value = object.optString(key, "");
+        return "null".equals(value) ? "" : value;
     }
 
     private String safeMessage(Exception error) {

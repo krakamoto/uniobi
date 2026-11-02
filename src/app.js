@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, unlinkSync } from 'node:fs';
 import { newId, nowIso, isPathInside, uniqueStrings, parseJsonSafe } from './utils.js';
 import { saveNotesToVault, vaultIsWritable } from './vault.js';
 import { createWebdavHandler } from './webdav.js';
@@ -300,6 +300,61 @@ export function createApp({ config, store, worker }) {
     }
     const updated = store.updateJob(job.id, { status: 'cancelled', error: 'Job annullato dall’utente.', processed_at: new Date().toISOString() });
     res.json({ job: jobSummary(updated) });
+  });
+
+  app.delete('/api/jobs/:id', requireAuth, (req, res) => {
+    const job = store.getJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'Job non trovato.' });
+    if (job.status === 'processing') {
+      return res.status(409).json({ error: 'Elaborazione in corso: annulla il job e attendi prima di eliminarlo.' });
+    }
+    if (job.status === 'uploaded') worker.remove(job.id);
+
+    const relativePaths = new Set();
+    for (const file of store.getVaultFiles(job.id)) relativePaths.add(file.relative_path);
+    if (job.vault_path) relativePaths.add(job.vault_path);
+    for (const value of job.vault_paths_json || []) relativePaths.add(value);
+    for (const note of job.result_json?.notes || []) {
+      for (const figure of note.figures || []) {
+        if (figure.assetPath) relativePaths.add(figure.assetPath);
+      }
+    }
+
+    const deletedVaultPaths = [];
+    try {
+      for (const relativePath of relativePaths) {
+        if (!relativePath) continue;
+        const absolutePath = path.resolve(config.vaultPath, relativePath);
+        if (!isPathInside(config.vaultPath, absolutePath)) {
+          throw new Error(`Percorso vault non valido: ${relativePath}`);
+        }
+        if (existsSync(absolutePath)) {
+          unlinkSync(absolutePath);
+          deletedVaultPaths.push(relativePath);
+        }
+      }
+
+      const uploadDirectory = path.resolve(config.uploadDir, job.id);
+      if (isPathInside(config.uploadDir, uploadDirectory)) {
+        rmSync(uploadDirectory, { recursive: true, force: true });
+      }
+
+      rebuildAllVaultArtifacts(config.vaultPath, { subjectRoots: config.obsidianSubjectRoots });
+      store.deleteJobCascade(job.id);
+      res.json({
+        ok: true,
+        deletedVaultPaths,
+        deletedAttachments: deletedVaultPaths.filter((value) => /\.(png|jpe?g|webp|gif)$/i.test(value)),
+        message: deletedVaultPaths.length
+          ? `Attività eliminata. Rimossi ${deletedVaultPaths.length} file dal vault.`
+          : 'Attività eliminata.'
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: `Eliminazione incompleta: ${error.message}`,
+        deletedVaultPaths
+      });
+    }
   });
 
   app.post('/api/jobs/:id/retry', requireAuth, (req, res) => {

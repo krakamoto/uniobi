@@ -118,6 +118,10 @@ final class ApiClient {
         return request("PUT", path, json.getBytes(StandardCharsets.UTF_8), "application/json; charset=utf-8", false);
     }
 
+    ApiResponse delete(String path) throws IOException {
+        return request("DELETE", path, null, null, false);
+    }
+
     ApiResponse upload(String path, ContentResolver resolver, Map<String, String> fields, List<UploadPart> files) throws IOException {
         String boundary = "----UniAiBoundary" + System.currentTimeMillis();
         HttpURLConnection connection = open("POST", path);

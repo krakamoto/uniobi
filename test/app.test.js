@@ -135,6 +135,15 @@ test('flusso end-to-end: upload, analisi mock, salvataggio atomico nel vault', a
   });
   assert.equal(duplicateResponse.status, 409);
 
+  const deleteResponse = await fetch(`${baseUrl}/api/jobs/${jobId}`, { method: 'DELETE' });
+  assert.equal(deleteResponse.status, 200);
+  const deletePayload = await deleteResponse.json();
+  assert.equal(deletePayload.ok, true);
+  assert.ok(deletePayload.deletedVaultPaths.includes(savePayload.vaultPath));
+  assert.equal(existsSync(savedPath), false);
+  const deletedDetail = await fetch(`${baseUrl}/api/jobs/${jobId}`);
+  assert.equal(deletedDetail.status, 404);
+
   // WebDAV: autenticazione, PROPFIND, PUT, GET e sincronizzazione bidirezionale col vault.
   const unauthorizedDav = await fetch(`${baseUrl}/webdav/`, { method: 'PROPFIND' });
   assert.equal(unauthorizedDav.status, 401);
