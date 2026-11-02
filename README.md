@@ -235,6 +235,8 @@ L’app Android nativa si trova in `android/` e usa il backend UniAi come proxy 
 - selezione multipla dalla galleria con Photo Picker e fallback al selettore documenti;
 - fotocamera;
 - anteprima e rimozione delle immagini;
+- interfaccia Android a tab: Carica, Coda, Attività e Impostazioni;
+- pulsante impostazioni nella barra superiore;
 - gestione completa dei corsi: creazione, selezione, rinomina ed eliminazione;
 - revisione delle immagini selezionate con riordino e rimozione;
 - elenco dettagliato della coda con retry ed eliminazione dei singoli elementi;

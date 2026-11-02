@@ -66,6 +66,10 @@ public class MainActivity extends Activity {
     private static final int REQUEST_PICK_IMAGES = 4001;
     private static final int REQUEST_CAMERA = 4002;
     private static final int REQUEST_NETWORK_PERMISSIONS = 4003;
+    private static final int TAB_UPLOAD = 0;
+    private static final int TAB_QUEUE = 1;
+    private static final int TAB_ACTIVITY = 2;
+    private static final int TAB_SETTINGS = 3;
     private static final int PRIMARY = Color.rgb(91, 75, 219);
     private static final int PRIMARY_DARK = Color.rgb(68, 54, 184);
     private static final int TEXT = Color.rgb(23, 21, 42);
@@ -81,6 +85,14 @@ public class MainActivity extends Activity {
 
     private SharedPreferences prefs;
     private ApiClient api;
+    private FrameLayout tabContentFrame;
+    private final List<View> tabViews = new ArrayList<>();
+    private LinearLayout[] tabItems;
+    private ImageView[] tabIcons;
+    private TextView[] tabLabels;
+    private TextView topStatusView;
+    private TextView queueTabLabel;
+    private int currentTab = TAB_UPLOAD;
     private Uri cameraOutputUri;
 
     private EditText serverUrlInput;
@@ -165,55 +177,167 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setBackgroundColor(BG);
+        LinearLayout appRoot = new LinearLayout(this);
+        appRoot.setOrientation(LinearLayout.VERTICAL);
+        appRoot.setBackgroundColor(BG);
+        appRoot.setFitsSystemWindows(true);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(18), dp(18), dp(32));
-        scroll.addView(root, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        appRoot.addView(buildTopBar(), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView overline = text("APPUNTI → OBSIDIAN", 11, PRIMARY, Typeface.BOLD);
-        overline.setLetterSpacing(0.12f);
-        root.addView(overline);
+        tabContentFrame = new FrameLayout(this);
+        appRoot.addView(tabContentFrame, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        TextView title = text("UniAi Mobile", 31, TEXT, Typeface.BOLD);
-        title.setPadding(0, dp(3), 0, 0);
-        root.addView(title);
+        LinearLayout uploadTab = createTabContent();
+        uploadTab.addView(text("Nuova lezione", 26, TEXT, Typeface.BOLD));
+        uploadTab.addView(text("Scatta o scegli più foto, controlla l'ordine e mettile in coda. Il caricamento partirà appena il server sarà raggiungibile.", 13, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+        uploadTab.addView(uploadCard(), matchTop(dp(14)));
 
-        TextView subtitle = text("Fotografa gli appunti, caricali sul server e trasformali in note Obsidian con Gemini.", 14, MUTED, Typeface.NORMAL);
-        subtitle.setPadding(0, dp(6), 0, dp(18));
-        root.addView(subtitle);
+        LinearLayout queueTab = createTabContent();
+        queueTab.addView(text("Coda di caricamento", 26, TEXT, Typeface.BOLD));
+        queueTab.addView(text("Gestisci i caricamenti locali, riprova quelli falliti o elimina quelli non più necessari.", 13, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+        queueTab.addView(queueCard(), matchTop(dp(14)));
 
-        root.addView(networkCard(), matchTop(dp(10)));
-        root.addView(serverCard(), matchTop(dp(10)));
-
-        loginCard = loginCard();
-        loginCard.setVisibility(View.GONE);
-        root.addView(loginCard, matchTop(dp(12)));
-
-        root.addView(uploadCard(), matchTop(dp(14)));
-        root.addView(queueCard(), matchTop(dp(14)));
-
+        LinearLayout activityTab = createTabContent();
         LinearLayout historyHeader = new LinearLayout(this);
         historyHeader.setOrientation(LinearLayout.HORIZONTAL);
         historyHeader.setGravity(Gravity.CENTER_VERTICAL);
-        TextView historyTitle = text("Le tue elaborazioni", 22, TEXT, Typeface.BOLD);
+        TextView historyTitle = text("Attività", 26, TEXT, Typeface.BOLD);
         historyHeader.addView(historyTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         Button refresh = smallButton("Aggiorna");
         refresh.setOnClickListener(view -> loadJobs(false));
         historyHeader.addView(refresh);
-        root.addView(historyHeader, matchTop(dp(26)));
-
+        activityTab.addView(historyHeader);
         historyStatus = text("", 12, MUTED, Typeface.NORMAL);
-        root.addView(historyStatus, matchTop(dp(6)));
-
+        activityTab.addView(historyStatus, matchTop(dp(6)));
         historyContainer = new LinearLayout(this);
         historyContainer.setOrientation(LinearLayout.VERTICAL);
-        root.addView(historyContainer, matchTop(dp(8)));
+        activityTab.addView(historyContainer, matchTop(dp(8)));
 
-        setContentView(scroll);
+        LinearLayout settingsTab = createTabContent();
+        settingsTab.addView(text("Impostazioni", 26, TEXT, Typeface.BOLD));
+        settingsTab.addView(text("Server, sicurezza della rete e accesso.", 13, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+        settingsTab.addView(networkCard(), matchTop(dp(14)));
+        settingsTab.addView(serverCard(), matchTop(dp(12)));
+        loginCard = loginCard();
+        loginCard.setVisibility(View.GONE);
+        settingsTab.addView(loginCard, matchTop(dp(12)));
+        settingsTab.addView(infoCard(), matchTop(dp(12)));
+
+        appRoot.addView(buildBottomNavigation(), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        setContentView(appRoot);
+        selectTab(TAB_UPLOAD);
+    }
+
+    private LinearLayout buildTopBar() {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(18), dp(12), dp(10), dp(8));
+        bar.setBackgroundColor(BG);
+
+        TextView mark = text("U", 19, Color.WHITE, Typeface.BOLD);
+        mark.setGravity(Gravity.CENTER);
+        GradientDrawable markBg = new GradientDrawable();
+        markBg.setColor(PRIMARY);
+        markBg.setCornerRadius(dp(13));
+        mark.setBackground(markBg);
+        bar.addView(mark, new LinearLayout.LayoutParams(dp(42), dp(42)));
+
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.setPadding(dp(11), 0, 0, 0);
+        TextView title = text("UniAi", 20, TEXT, Typeface.BOLD);
+        topStatusView = text("Verifica rete…", 11, MUTED, Typeface.NORMAL);
+        titles.addView(title);
+        titles.addView(topStatusView);
+        bar.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        ImageView settings = new ImageView(this);
+        settings.setImageResource(R.drawable.ic_settings);
+        settings.setColorFilter(TEXT);
+        settings.setContentDescription("Apri impostazioni");
+        settings.setPadding(dp(10), dp(10), dp(10), dp(10));
+        settings.setBackgroundColor(Color.TRANSPARENT);
+        settings.setOnClickListener(view -> selectTab(TAB_SETTINGS));
+        bar.addView(settings, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        return bar;
+    }
+
+    private LinearLayout createTabContent() {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(BG);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(18), dp(12), dp(18), dp(28));
+        scroll.addView(content, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        tabContentFrame.addView(scroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        tabViews.add(scroll);
+        return content;
+    }
+
+    private LinearLayout buildBottomNavigation() {
+        LinearLayout nav = new LinearLayout(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setGravity(Gravity.CENTER);
+        nav.setPadding(dp(8), dp(5), dp(8), dp(7));
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(Color.WHITE);
+        background.setStroke(dp(1), Color.argb(24, 36, 30, 80));
+        nav.setBackground(background);
+
+        tabItems = new LinearLayout[4];
+        tabIcons = new ImageView[4];
+        tabLabels = new TextView[4];
+        tabItems[0] = addTabItem(nav, R.drawable.ic_upload, "Carica", TAB_UPLOAD);
+        tabItems[1] = addTabItem(nav, R.drawable.ic_queue, "Coda", TAB_QUEUE);
+        tabItems[2] = addTabItem(nav, R.drawable.ic_activity, "Attività", TAB_ACTIVITY);
+        tabItems[3] = addTabItem(nav, R.drawable.ic_settings, "Impostazioni", TAB_SETTINGS);
+        queueTabLabel = tabLabels[TAB_QUEUE];
+        return nav;
+    }
+
+    private LinearLayout addTabItem(LinearLayout parent, int iconRes, String label, int index) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
+        item.setPadding(dp(4), dp(7), dp(4), dp(5));
+        item.setClickable(true);
+        item.setFocusable(true);
+        item.setContentDescription(label);
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(MUTED);
+        item.addView(icon, new LinearLayout.LayoutParams(dp(23), dp(23)));
+        TextView textLabel = text(label, 10, MUTED, Typeface.BOLD);
+        textLabel.setGravity(Gravity.CENTER);
+        item.addView(textLabel);
+        item.setOnClickListener(view -> selectTab(index));
+        parent.addView(item, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        tabIcons[index] = icon;
+        tabLabels[index] = textLabel;
+        return item;
+    }
+
+    private void selectTab(int index) {
+        if (index < 0 || index >= tabViews.size()) return;
+        currentTab = index;
+        for (int i = 0; i < tabViews.size(); i += 1) {
+            tabViews.get(i).setVisibility(i == index ? View.VISIBLE : View.GONE);
+            int color = i == index ? PRIMARY : MUTED;
+            if (tabIcons[i] != null) tabIcons[i].setColorFilter(color);
+            if (tabLabels[i] != null) tabLabels[i].setTextColor(color);
+        }
+        if (index == TAB_ACTIVITY) loadJobs(true);
+        if (index == TAB_SETTINGS) refreshNetworkStatus();
+        if (index == TAB_QUEUE) refreshQueueStatus();
+    }
+
+    private View infoCard() {
+        LinearLayout card = card();
+        card.addView(text("Informazioni", 17, TEXT, Typeface.BOLD));
+        card.addView(text("UniAi 1.8 · Android 17 ready\nLe foto vengono compresse sul telefono. Il server viene contattato solo su reti fidate, VPN o emulatore locale.", 12, MUTED, Typeface.NORMAL), matchTop(dp(6)));
+        return card;
     }
 
     private View serverCard() {
@@ -526,6 +650,11 @@ public class MainActivity extends Activity {
         boolean nearbyWifi = TrustedNetworkManager.hasNearbyWifiPermission(this);
         boolean locationEnabled = TrustedNetworkManager.isLocationEnabled(this);
         String label = TrustedNetworkManager.currentNetworkLabel(this);
+        if (topStatusView != null) {
+            boolean trusted = TrustedNetworkManager.isOnVpn(this) || TrustedNetworkManager.isCurrentNetworkTrusted(this);
+            topStatusView.setText(trusted ? "Rete sicura" : "Rete non autorizzata");
+            topStatusView.setTextColor(trusted ? SUCCESS : WARNING);
+        }
         networkStatusView.setText("Rete attuale: " + label
             + "\nPermesso posizione precisa: " + (fineLocation ? "sì" : "no")
             + " · Permesso Wi-Fi: " + (nearbyWifi ? "sì" : "no")
@@ -684,6 +813,7 @@ public class MainActivity extends Activity {
             uploadStatus.setText("Connessione bloccata: " + reason);
             toast(reason);
             refreshNetworkStatus();
+            selectTab(TAB_SETTINGS);
         }
         return false;
     }
@@ -722,6 +852,7 @@ public class MainActivity extends Activity {
         if (queueStatusView == null) return;
         int pending = UploadQueueStore.pendingCount(this);
         int failed = UploadQueueStore.failedCount(this);
+        if (queueTabLabel != null) queueTabLabel.setText(pending + failed > 0 ? "Coda (" + (pending + failed) + ")" : "Coda");
         if (pending == 0 && failed == 0) {
             queueStatusView.setText("Nessun caricamento in sospeso.");
             queueProgress.setVisibility(View.GONE);
@@ -1062,6 +1193,7 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     uploadStatus.setText(authenticated ? "Server connesso." : "Server connesso, accesso richiesto.");
                     loginCard.setVisibility(passwordRequired && !authenticated ? View.VISIBLE : View.GONE);
+                    if (passwordRequired && !authenticated) selectTab(TAB_SETTINGS);
                     if (authenticated) {
                         loadJobs(true);
                         fetchServerCourses();
