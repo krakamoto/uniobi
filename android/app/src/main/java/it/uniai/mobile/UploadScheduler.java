@@ -7,6 +7,7 @@ import android.content.Context;
 
 final class UploadScheduler {
     private static final int JOB_ID = 4101;
+    private static final int PERIODIC_JOB_ID = 4102;
 
     private UploadScheduler() {
     }
@@ -24,8 +25,22 @@ final class UploadScheduler {
         scheduler.schedule(job);
     }
 
+    static void ensurePeriodic(Context context) {
+        JobScheduler scheduler = (JobScheduler) context.getSystemService(Context.JOB_SCHEDULER_SERVICE);
+        if (scheduler == null) return;
+        JobInfo job = new JobInfo.Builder(PERIODIC_JOB_ID, new ComponentName(context, UploadJobService.class))
+            .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+            .setPersisted(true)
+            .setPeriodic(15 * 60 * 1000L)
+            .build();
+        scheduler.schedule(job);
+    }
+
     static void cancel(Context context) {
         JobScheduler scheduler = (JobScheduler) context.getSystemService(Context.JOB_SCHEDULER_SERVICE);
-        if (scheduler != null) scheduler.cancel(JOB_ID);
+        if (scheduler != null) {
+            scheduler.cancel(JOB_ID);
+            scheduler.cancel(PERIODIC_JOB_ID);
+        }
     }
 }

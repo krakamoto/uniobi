@@ -2,7 +2,7 @@
 
 Client Android nativo per UniAi. Permette di scattare o selezionare foto degli appunti, caricarli sul server e salvare la nota generata da Gemini nel vault Obsidian.
 
-Versione: **1.3**
+Versione: **1.4**
 
 ## Build
 
@@ -45,6 +45,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 9. Aprire il job dallo storico, controllare il Markdown e premere **Salva nel vault**.
 
 I corsi creati restano salvati sul telefono. Se il backend contiene già corsi nello storico, vengono importati automaticamente nel menu.
+
+## Sicurezza di rete
+
+L'app legge l'SSID del Wi-Fi corrente e contatta il backend solo se la rete è stata autorizzata, se è attiva una VPN o se si usa un emulatore locale. Su Wi-Fi pubblici o reti sconosciute la coda locale resta sospesa e non viene inviato alcun dato.
 
 ## Sicurezza
 

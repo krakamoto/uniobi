@@ -239,6 +239,7 @@ L’app Android nativa si trova in `android/` e usa il backend UniAi come proxy 
 - importazione automatica dei corsi già presenti sul backend;
 - data lezione opzionale;
 - coda locale persistente: le foto vengono compresse, salvate sul telefono e caricate automaticamente quando la rete e il server sono disponibili;
+- blocco delle reti Wi-Fi non fidate: l’app contatta il server solo da reti autorizzate, VPN o emulatori locali;
 - retry automatico tramite `JobScheduler` e aggiornamento della UI;
 - ottimizzazione delle immagini prima dell’upload;
 - upload multipart con corso, data, titolo, tag e istruzioni;
@@ -291,6 +292,30 @@ APK: android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 La build è stata eseguita con Gradle 8.10.2, AGP 8.7.3, JDK 17 e Android SDK 35. Non era disponibile un dispositivo/emulatore collegato per un test UI manuale.
+
+### Sicurezza della rete Android
+
+L’app Android non contatta il server su una rete Wi-Fi qualsiasi. Prima di effettuare login, polling, upload o salvataggio:
+
+1. verifica la rete attiva;
+2. legge l’SSID del Wi-Fi corrente;
+3. confronta l’SSID con l’elenco delle reti fidate salvate sul telefono.
+
+L’accesso è consentito solo se:
+
+- la rete Wi-Fi corrente è stata autorizzata dall’utente;
+- oppure è attiva una VPN;
+- oppure si sta usando un emulatore con indirizzo locale `10.0.2.2` / `127.0.0.1`.
+
+Per leggere l’SSID, Android richiede il permesso di localizzazione. L’app lo richiede esplicitamente e non usa la posizione per altri scopi.
+
+Nella schermata **Rete Wi-Fi** si può:
+
+- rendere fidata la rete corrente;
+- rimuovere la fiducia;
+- gestire l’elenco delle reti autorizzate.
+
+Se la rete non è fidata, la coda resta salvata localmente ma non viene inviata e nessuna richiesta viene fatta al server.
 
 ## Sincronizzazione reale con Obsidian Mobile
 

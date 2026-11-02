@@ -25,6 +25,13 @@ public class UploadJobService extends JobService {
     @Override
     public boolean onStartJob(JobParameters params) {
         if (running) return true;
+        SharedPreferences networkPrefs = getSharedPreferences("uniai", MODE_PRIVATE);
+        String serverUrl = networkPrefs.getString("server_url", "http://10.0.2.2:3000");
+        if (!TrustedNetworkManager.canContactServer(getApplicationContext(), serverUrl)) {
+            notifyQueueChanged();
+            jobFinished(params, false);
+            return false;
+        }
         running = true;
         UploadQueueStore.requeueUploading(getApplicationContext());
         executor.execute(() -> {

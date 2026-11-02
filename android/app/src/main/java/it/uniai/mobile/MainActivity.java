@@ -1,5 +1,6 @@
 package it.uniai.mobile;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
@@ -11,6 +12,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -61,6 +63,7 @@ import java.util.concurrent.Executors;
 public class MainActivity extends Activity {
     private static final int REQUEST_PICK_IMAGES = 4001;
     private static final int REQUEST_CAMERA = 4002;
+    private static final int REQUEST_NETWORK_PERMISSIONS = 4003;
     private static final int PRIMARY = Color.rgb(91, 75, 219);
     private static final int PRIMARY_DARK = Color.rgb(68, 54, 184);
     private static final int TEXT = Color.rgb(23, 21, 42);
@@ -94,6 +97,10 @@ public class MainActivity extends Activity {
     private TextView uploadStatus;
     private Button uploadButton;
     private ProgressBar uploadProgress;
+    private LinearLayout networkPanel;
+    private TextView networkStatusView;
+    private Button networkActionButton;
+    private Button networkManageButton;
     private LinearLayout queuePanel;
     private TextView queueStatusView;
     private ProgressBar queueProgress;
@@ -123,6 +130,8 @@ public class MainActivity extends Activity {
         buildUi();
         loadCourses();
         refreshQueueStatus();
+        refreshNetworkStatus();
+        UploadScheduler.ensurePeriodic(this);
         checkServerAndAuth();
     }
 
@@ -132,7 +141,8 @@ public class MainActivity extends Activity {
         registerQueueUpdates();
         registerNetworkUpdates();
         refreshQueueStatus();
-        if (UploadQueueStore.pendingCount(this) > 0) UploadScheduler.schedule(this);
+        refreshNetworkStatus();
+        if (serverNetworkAllowed(false) && UploadQueueStore.pendingCount(this) > 0) UploadScheduler.schedule(this);
         handler.removeCallbacks(pollRunnable);
         handler.postDelayed(pollRunnable, 6000);
     }
@@ -173,6 +183,7 @@ public class MainActivity extends Activity {
         subtitle.setPadding(0, dp(6), 0, dp(18));
         root.addView(subtitle);
 
+        root.addView(networkCard(), matchTop(dp(10)));
         root.addView(serverCard(), matchTop(dp(10)));
 
         loginCard = loginCard();
@@ -426,6 +437,7 @@ public class MainActivity extends Activity {
     }
 
     private void fetchServerCourses() {
+        if (!serverNetworkAllowed(false)) return;
         executor.execute(() -> {
             try {
                 ApiResponse response = api.get("/api/courses");
@@ -461,6 +473,139 @@ public class MainActivity extends Activity {
         }
         int index = selected.isEmpty() ? 0 : courseNames.indexOf(selected);
         if (index > 0) courseSpinner.setSelection(index);
+    }
+
+    private View networkCard() {
+        networkPanel = card();
+        networkPanel.addView(text("Rete Wi-Fi", 20, TEXT, Typeface.BOLD));
+        networkPanel.addView(text("Per proteggere foto e sessione, l'app contatta il server solo da reti Wi-Fi che hai autorizzato.", 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+        networkStatusView = text("Verifica rete…", 13, MUTED, Typeface.NORMAL);
+        networkPanel.addView(networkStatusView, matchTop(dp(10)));
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setPadding(0, dp(8), 0, 0);
+        networkActionButton = secondaryButton("Rendi questa rete fidata");
+        networkActionButton.setOnClickListener(view -> onNetworkAction());
+        actions.addView(networkActionButton, weighted());
+        networkManageButton = smallButton("Gestisci");
+        networkManageButton.setOnClickListener(view -> showTrustedNetworks());
+        LinearLayout.LayoutParams manageParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        manageParams.setMarginStart(dp(8));
+        actions.addView(networkManageButton, manageParams);
+        networkPanel.addView(actions);
+        return networkPanel;
+    }
+
+    private void refreshNetworkStatus() {
+        if (networkStatusView == null) return;
+        boolean permission = TrustedNetworkManager.hasWifiPermission(this);
+        String label = TrustedNetworkManager.currentNetworkLabel(this);
+        networkStatusView.setText("Rete attuale: " + label);
+        if (!permission) {
+            networkActionButton.setText("Consenti accesso rete");
+            networkActionButton.setEnabled(true);
+        } else if (TrustedNetworkManager.isOnVpn(this)) {
+            networkActionButton.setText("VPN attiva");
+            networkActionButton.setEnabled(false);
+        } else if (!TrustedNetworkManager.isOnWifi(this)) {
+            networkActionButton.setText("Nessun Wi-Fi connesso");
+            networkActionButton.setEnabled(false);
+        } else {
+            String ssid = TrustedNetworkManager.currentSsid(this);
+            if (ssid.isEmpty()) {
+                networkActionButton.setText("Attiva posizione e riprova");
+                networkActionButton.setEnabled(true);
+            } else if (TrustedNetworkManager.trustedSsids(this).contains(ssid)) {
+                networkActionButton.setText("Rimuovi fiducia da questa rete");
+                networkActionButton.setEnabled(true);
+            } else {
+                networkActionButton.setText("Rendi questa rete fidata");
+                networkActionButton.setEnabled(true);
+            }
+        }
+        networkManageButton.setVisibility(TrustedNetworkManager.trustedSsids(this).isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    private void onNetworkAction() {
+        if (!TrustedNetworkManager.hasWifiPermission(this)) {
+            requestNetworkPermissions();
+            return;
+        }
+        String ssid = TrustedNetworkManager.currentSsid(this);
+        if (ssid.isEmpty()) {
+            toast("Attiva la posizione del telefono e riprova, oppure concedi il permesso di localizzazione.");
+            requestNetworkPermissions();
+            return;
+        }
+        if (TrustedNetworkManager.trustedSsids(this).contains(ssid)) {
+            TrustedNetworkManager.removeTrustedSsid(this, ssid);
+            toast("Rete rimossa dalle reti fidate.");
+            refreshNetworkStatus();
+            return;
+        }
+        TrustedNetworkManager.addTrustedSsid(this, ssid);
+        toast("Rete fidata salvata: " + ssid);
+        refreshNetworkStatus();
+        if (serverNetworkAllowed(false)) {
+            UploadScheduler.schedule(this);
+            checkServerAndAuth();
+        }
+    }
+
+    private void showTrustedNetworks() {
+        List<String> networks = TrustedNetworkManager.trustedSsids(this);
+        if (networks.isEmpty()) {
+            toast("Nessuna rete fidata configurata.");
+            return;
+        }
+        String[] items = networks.toArray(new String[0]);
+        new AlertDialog.Builder(this)
+            .setTitle("Reti Wi-Fi fidate")
+            .setItems(items, (dialog, which) -> new AlertDialog.Builder(this)
+                .setTitle("Rimuovere la rete?")
+                .setMessage(items[which])
+                .setNegativeButton("Annulla", null)
+                .setPositiveButton("Rimuovi", (confirm, ignored) -> {
+                    TrustedNetworkManager.removeTrustedSsid(this, items[which]);
+                    refreshNetworkStatus();
+                    toast("Rete rimossa.");
+                })
+                .show())
+            .setNegativeButton("Chiudi", null)
+            .show();
+    }
+
+    private void requestNetworkPermissions() {
+        TrustedNetworkManager.markLocationPrompted(this);
+        if (Build.VERSION.SDK_INT >= 33) {
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES}, REQUEST_NETWORK_PERMISSIONS);
+        } else {
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_NETWORK_PERMISSIONS);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_NETWORK_PERMISSIONS) {
+            refreshNetworkStatus();
+            if (TrustedNetworkManager.hasWifiPermission(this)) {
+                toast("Permesso rete concesso. Ora puoi rendere fidata questa rete Wi-Fi.");
+            } else {
+                toast("Senza permesso di localizzazione Android non consente di leggere il nome del Wi-Fi.");
+            }
+        }
+    }
+
+    private boolean serverNetworkAllowed(boolean showMessage) {
+        if (TrustedNetworkManager.canContactServer(this, api.getBaseUrl())) return true;
+        if (showMessage) {
+            uploadStatus.setText("Rete non fidata: il server non verrà contattato. Rendi fidata la rete Wi-Fi di casa.");
+            toast("Rete non fidata. Autorizza il Wi-Fi attuale prima di usare il server.");
+            refreshNetworkStatus();
+        }
+        return false;
     }
 
     private View queueCard() {
@@ -542,7 +687,10 @@ public class MainActivity extends Activity {
             public void onAvailable(Network network) {
                 runOnUiThread(() -> {
                     refreshQueueStatus();
-                    if (UploadQueueStore.pendingCount(MainActivity.this) > 0) UploadScheduler.schedule(MainActivity.this);
+                    refreshNetworkStatus();
+                    if (TrustedNetworkManager.canContactServer(MainActivity.this, api.getBaseUrl()) && UploadQueueStore.pendingCount(MainActivity.this) > 0) {
+                        UploadScheduler.schedule(MainActivity.this);
+                    }
                 });
             }
         };
@@ -572,6 +720,7 @@ public class MainActivity extends Activity {
     }
 
     private void checkServerAndAuth() {
+        if (!serverNetworkAllowed(true)) return;
         uploadStatus.setText("Connessione al server…");
         executor.execute(() -> {
             try {
@@ -600,6 +749,7 @@ public class MainActivity extends Activity {
     }
 
     private void login() {
+        if (!serverNetworkAllowed(true)) return;
         String password = passwordInput.getText().toString();
         if (password.isEmpty()) {
             toast("Inserisci la password.");
@@ -801,6 +951,7 @@ public class MainActivity extends Activity {
 
     private void loadJobs(boolean silent) {
         if (!authenticated && passwordRequired) return;
+        if (!serverNetworkAllowed(!silent)) return;
         executor.execute(() -> {
             try {
                 ApiResponse response = api.get("/api/jobs?limit=30");
@@ -865,6 +1016,7 @@ public class MainActivity extends Activity {
 
     private void openJob(String jobId) {
         if (jobId.isEmpty()) return;
+        if (!serverNetworkAllowed(true)) return;
         toast("Caricamento dettaglio…");
         executor.execute(() -> {
             try {
@@ -1003,6 +1155,7 @@ public class MainActivity extends Activity {
 
     private void saveMarkdown(String jobId, EditText editor) {
         if (editor == null) return;
+        if (!serverNetworkAllowed(true)) return;
         String markdown = editor.getText().toString();
         executor.execute(() -> {
             try {
@@ -1017,6 +1170,7 @@ public class MainActivity extends Activity {
     }
 
     private void saveJobToVault(String jobId, EditText editor) {
+        if (!serverNetworkAllowed(true)) return;
         String markdown = editor == null ? null : editor.getText().toString();
         executor.execute(() -> {
             try {
@@ -1043,6 +1197,7 @@ public class MainActivity extends Activity {
     }
 
     private void retryJob(String jobId) {
+        if (!serverNetworkAllowed(true)) return;
         executor.execute(() -> {
             try {
                 ApiResponse response = api.postJson("/api/jobs/" + jobId + "/retry", "{}");
