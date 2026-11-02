@@ -25,6 +25,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.text.InputType;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -521,11 +522,19 @@ public class MainActivity extends Activity {
 
     private void refreshNetworkStatus() {
         if (networkStatusView == null) return;
-        boolean permission = TrustedNetworkManager.hasWifiPermission(this);
+        boolean fineLocation = TrustedNetworkManager.hasFineLocationPermission(this);
+        boolean nearbyWifi = TrustedNetworkManager.hasNearbyWifiPermission(this);
+        boolean locationEnabled = TrustedNetworkManager.isLocationEnabled(this);
         String label = TrustedNetworkManager.currentNetworkLabel(this);
-        networkStatusView.setText("Rete attuale: " + label);
-        if (!permission) {
+        networkStatusView.setText("Rete attuale: " + label
+            + "\nPermesso posizione precisa: " + (fineLocation ? "sì" : "no")
+            + " · Permesso Wi-Fi: " + (nearbyWifi ? "sì" : "no")
+            + " · Posizione di sistema: " + (locationEnabled ? "attiva" : "disattiva"));
+        if (!fineLocation || !nearbyWifi) {
             networkActionButton.setText("Consenti accesso rete");
+            networkActionButton.setEnabled(true);
+        } else if (!locationEnabled && TrustedNetworkManager.isOnWifi(this)) {
+            networkActionButton.setText("Apri impostazioni posizione");
             networkActionButton.setEnabled(true);
         } else if (TrustedNetworkManager.isOnVpn(this)) {
             networkActionButton.setText("VPN attiva");
@@ -536,7 +545,7 @@ public class MainActivity extends Activity {
         } else {
             String ssid = TrustedNetworkManager.currentSsid(this);
             if (ssid.isEmpty()) {
-                networkActionButton.setText("Attiva posizione e riprova");
+                networkActionButton.setText("Apri impostazioni posizione");
                 networkActionButton.setEnabled(true);
             } else if (TrustedNetworkManager.trustedSsids(this).contains(ssid)) {
                 networkActionButton.setText("Rimuovi fiducia da questa rete");
@@ -550,14 +559,18 @@ public class MainActivity extends Activity {
     }
 
     private void onNetworkAction() {
-        if (!TrustedNetworkManager.hasWifiPermission(this)) {
+        if (!TrustedNetworkManager.hasFineLocationPermission(this) || !TrustedNetworkManager.hasNearbyWifiPermission(this)) {
             requestNetworkPermissions();
+            return;
+        }
+        if (!TrustedNetworkManager.isLocationEnabled(this)) {
+            openLocationSettings();
             return;
         }
         String ssid = TrustedNetworkManager.currentSsid(this);
         if (ssid.isEmpty()) {
-            toast("Attiva la posizione del telefono e riprova, oppure concedi il permesso di localizzazione.");
-            requestNetworkPermissions();
+            toast("Android non espone l'SSID. Apri le impostazioni posizione e verifica che sia attiva.");
+            openLocationSettings();
             return;
         }
         if (TrustedNetworkManager.trustedSsids(this).contains(ssid)) {
@@ -607,15 +620,28 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void openLocationSettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+        } catch (Exception error) {
+            toast("Apri manualmente le impostazioni Android → Posizione.");
+        }
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_NETWORK_PERMISSIONS) {
             refreshNetworkStatus();
             if (TrustedNetworkManager.hasWifiPermission(this)) {
-                toast("Permesso rete concesso. Ora puoi rendere fidata questa rete Wi-Fi.");
+                if (!TrustedNetworkManager.isLocationEnabled(this)) {
+                    toast("Permesso concesso. Attiva ora la posizione di sistema per leggere l'SSID.");
+                    openLocationSettings();
+                } else {
+                    toast("Permesso rete concesso. Ora puoi rendere fidata questa rete Wi-Fi.");
+                }
             } else {
-                toast("Senza permesso di localizzazione Android non consente di leggere il nome del Wi-Fi.");
+                toast("Servono sia la posizione precisa sia il permesso Dispositivi Wi-Fi vicini.");
             }
         }
     }

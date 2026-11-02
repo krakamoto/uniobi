@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -25,8 +26,28 @@ final class TrustedNetworkManager {
     private TrustedNetworkManager() {
     }
 
-    static boolean hasWifiPermission(Context context) {
+    static boolean hasFineLocationPermission(Context context) {
         return context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    static boolean hasNearbyWifiPermission(Context context) {
+        if (Build.VERSION.SDK_INT < 33) return true;
+        return context.checkSelfPermission("android.permission.NEARBY_WIFI_DEVICES") == PackageManager.PERMISSION_GRANTED;
+    }
+
+    static boolean hasWifiPermission(Context context) {
+        return hasFineLocationPermission(context) && hasNearbyWifiPermission(context);
+    }
+
+    static boolean isLocationEnabled(Context context) {
+        try {
+            LocationManager manager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+            if (manager == null) return false;
+            if (Build.VERSION.SDK_INT >= 28) return manager.isLocationEnabled();
+            return manager.isProviderEnabled(LocationManager.GPS_PROVIDER) || manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     static String currentSsid(Context context) {
@@ -121,10 +142,12 @@ final class TrustedNetworkManager {
             return "HTTP è consentito solo verso server locali. Configura HTTPS o usa una VPN.";
         }
         if (isOnVpn(context)) return "";
-        if (!hasWifiPermission(context)) return "Concedi il permesso di localizzazione per identificare il Wi-Fi.";
+        if (!hasFineLocationPermission(context)) return "Concedi il permesso di posizione precisa.";
+        if (!hasNearbyWifiPermission(context)) return "Concedi il permesso Dispositivi Wi-Fi vicini (Android 13+).";
+        if (!isLocationEnabled(context)) return "La posizione di sistema è disattivata: attivala nelle impostazioni Android.";
         if (!isOnWifi(context)) return "Nessun Wi-Fi connesso. Il server non verrà contattato.";
         String ssid = currentSsid(context);
-        if (ssid.isEmpty()) return "SSID non disponibile. Attiva la posizione del telefono.";
+        if (ssid.isEmpty()) return "Android non espone l'SSID. Controlla posizione e permessi Wi-Fi.";
         if (!trustedSsids(context).contains(ssid)) return "La rete Wi-Fi attuale non è autorizzata.";
         return "";
     }

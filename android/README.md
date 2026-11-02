@@ -2,7 +2,7 @@
 
 Client Android nativo per UniAi. Permette di scattare o selezionare foto degli appunti, caricarli sul server e salvare la nota generata da Gemini nel vault Obsidian.
 
-Versione: **1.5**
+Versione: **1.6**
 
 ## Build
 
@@ -49,6 +49,13 @@ I corsi creati restano salvati sul telefono. Se il backend contiene già corsi n
 ## Sicurezza di rete
 
 L'app legge l'SSID del Wi-Fi corrente e contatta il backend solo se la rete è stata autorizzata, se è attiva una VPN o se si usa un emulatore locale. Su Wi-Fi pubblici o reti sconosciute la coda locale resta sospesa e non viene inviato alcun dato.
+
+Per leggere l'SSID su Android moderno servono contemporaneamente:
+- permesso di posizione precisa;
+- permesso Dispositivi Wi-Fi vicini su Android 13+;
+- posizione di sistema attiva.
+
+La schermata Rete Wi-Fi mostra lo stato dei tre requisiti e apre direttamente le impostazioni di sistema se la posizione è disattivata.
 
 ## Sicurezza
 
