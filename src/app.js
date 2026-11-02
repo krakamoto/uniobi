@@ -8,6 +8,8 @@ import { saveNotesToVault, vaultIsWritable } from './vault.js';
 import { createWebdavHandler } from './webdav.js';
 import { analyzeVaultStructure, matchSubject, rebuildAllVaultArtifacts, suggestedSubjectPath } from './vault-analysis.js';
 import { materializeFiguresForNotes } from './figures.js';
+import { createRateLimiter, securityHeaders } from './security.js';
+import { statfsSync } from 'node:fs';
 
 const MIME_EXTENSIONS = {
   'image/jpeg': '.jpg',
@@ -70,6 +72,13 @@ function publicJob(job, baseUrl = '') {
 export function createApp({ config, store, worker }) {
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', 1);
+  app.use(securityHeaders);
+  app.use((req, res, next) => {
+    req.requestId = crypto.randomUUID();
+    res.setHeader('X-Request-Id', req.requestId);
+    next();
+  });
 
   // WebDAV deve essere montato prima del body parser JSON: PUT riceve file binari.
   app.use(config.webdavPath, createWebdavHandler({ config }));
@@ -78,6 +87,8 @@ export function createApp({ config, store, worker }) {
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
   const sessions = new Set();
+  const loginLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, message: 'Troppi tentativi di accesso. Attendi qualche minuto.' });
+  const uploadLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 60, message: 'Troppi upload. Attendi qualche minuto.' });
 
   function isAuthenticated(req) {
     if (!config.appPassword) return true;
@@ -91,15 +102,33 @@ export function createApp({ config, store, worker }) {
   }
 
   app.get('/api/health', (req, res) => {
+    let disk = null;
+    try {
+      const stats = statfsSync(config.vaultPath);
+      disk = {
+        freeBytes: Number(stats.bavail) * Number(stats.bsize),
+        totalBytes: Number(stats.blocks) * Number(stats.bsize)
+      };
+    } catch {
+      disk = null;
+    }
     res.json({
       ok: true,
       version: config.version,
+      uptimeSeconds: Math.round(process.uptime()),
+      nodeVersion: process.version,
       aiProvider: config.aiProvider,
+      aiModel: config.aiModel,
+      aiFallbackEnabled: config.aiFallbackEnabled,
       vaultConfigured: Boolean(config.vaultPath),
       vaultWritable: vaultIsWritable(config.vaultPath, config.notesSubdir),
       autoSaveToVault: config.autoSaveToVault,
       webdavEnabled: config.webdavEnabled,
-      webdavPath: config.webdavPath
+      webdavPath: config.webdavPath,
+      cookieSecure: config.cookieSecure,
+      jobs: store.stats(),
+      memory: process.memoryUsage(),
+      disk
     });
   });
 
@@ -107,7 +136,7 @@ export function createApp({ config, store, worker }) {
     res.json({ passwordRequired: Boolean(config.appPassword), authenticated: isAuthenticated(req) });
   });
 
-  app.post('/api/login', (req, res) => {
+  app.post('/api/login', loginLimiter, (req, res) => {
     if (!config.appPassword) return res.json({ ok: true });
     if (String(req.body?.password || '') !== config.appPassword) {
       return res.status(401).json({ error: 'Password non corretta.' });
@@ -157,7 +186,7 @@ export function createApp({ config, store, worker }) {
     }
   });
 
-  app.post('/api/uploads', requireAuth, upload.array('files', config.maxFilesPerUpload), (req, res) => {
+  app.post('/api/uploads', requireAuth, uploadLimiter, upload.array('files', config.maxFilesPerUpload), (req, res) => {
     if (!req.files || req.files.length === 0) {
       if (req.uploadDir) rmSync(req.uploadDir, { recursive: true, force: true });
       return res.status(400).json({ error: 'Nessun file ricevuto. Seleziona almeno una foto degli appunti.' });
@@ -261,6 +290,16 @@ export function createApp({ config, store, worker }) {
     }
     const updated = store.updateJob(job.id, updates);
     res.json({ job: publicJob(updated) });
+  });
+
+  app.post('/api/jobs/:id/cancel', requireAuth, (req, res) => {
+    const job = store.getJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'Job non trovato.' });
+    if (['completed', 'failed', 'cancelled'].includes(job.status)) {
+      return res.status(409).json({ error: 'Il job non è più cancellabile.' });
+    }
+    const updated = store.updateJob(job.id, { status: 'cancelled', error: 'Job annullato dall’utente.', processed_at: new Date().toISOString() });
+    res.json({ job: jobSummary(updated) });
   });
 
   app.post('/api/jobs/:id/retry', requireAuth, (req, res) => {

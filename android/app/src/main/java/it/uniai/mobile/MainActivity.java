@@ -51,6 +51,7 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -102,6 +103,7 @@ public class MainActivity extends Activity {
     private Button networkActionButton;
     private Button networkManageButton;
     private LinearLayout queuePanel;
+    private LinearLayout queueItemsContainer;
     private TextView queueStatusView;
     private ProgressBar queueProgress;
     private Button queueRetryButton;
@@ -263,6 +265,16 @@ public class MainActivity extends Activity {
         previewScroll.setHorizontalScrollBarEnabled(false);
         previewScroll.addView(selectedContainer);
         card.addView(previewScroll, matchTop(dp(10)));
+        LinearLayout reviewRow = new LinearLayout(this);
+        reviewRow.setOrientation(LinearLayout.HORIZONTAL);
+        reviewRow.setGravity(Gravity.CENTER_VERTICAL);
+        reviewRow.setPadding(0, dp(6), 0, 0);
+        TextView reviewHint = text("Tocca una miniatura per riordinare o rimuovere.", 11, MUTED, Typeface.NORMAL);
+        reviewRow.addView(reviewHint, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button reviewImages = smallButton("Rivedi");
+        reviewImages.setOnClickListener(view -> showReviewImagesDialog());
+        reviewRow.addView(reviewImages);
+        card.addView(reviewRow);
         renderSelectedFiles();
 
         LinearLayout courseField = new LinearLayout(this);
@@ -292,6 +304,11 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams addCourseParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         addCourseParams.setMarginStart(dp(8));
         courseRow.addView(addCourse, addCourseParams);
+        Button manageCourses = smallButton("Gestisci");
+        LinearLayout.LayoutParams manageCourseParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        manageCourseParams.setMarginStart(dp(6));
+        manageCourses.setOnClickListener(view -> showManageCoursesDialog());
+        courseRow.addView(manageCourses, manageCourseParams);
         courseField.addView(courseRow, matchTop(dp(6)));
         card.addView(courseField, matchTop(dp(12)));
 
@@ -348,6 +365,8 @@ public class MainActivity extends Activity {
             ImageView image = new ImageView(this);
             image.setScaleType(ImageView.ScaleType.CENTER_CROP);
             image.setBackgroundColor(Color.rgb(238, 235, 248));
+            image.setContentDescription("Anteprima " + (index + 1));
+            image.setOnClickListener(view -> showReviewImagesDialog());
             try {
                 image.setImageURI(part.uri);
             } catch (Exception ignored) {
@@ -363,6 +382,7 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams removeParams = new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.TOP | Gravity.END);
             removeParams.setMargins(0, dp(4), dp(4), 0);
             final int removeIndex = index;
+            remove.setContentDescription("Rimuovi immagine " + (index + 1));
             remove.setOnClickListener(view -> {
                 selectedFiles.remove(removeIndex);
                 renderSelectedFiles();
@@ -408,6 +428,7 @@ public class MainActivity extends Activity {
         }
         int existing = courseNames.indexOf(clean);
         if (existing <= 0) {
+            unhideCourse(clean);
             courseNames.add(clean);
             courseAdapter.notifyDataSetChanged();
             existing = courseNames.size() - 1;
@@ -461,8 +482,9 @@ public class MainActivity extends Activity {
     private void mergeServerCourses(List<String> names) {
         boolean changed = false;
         String selected = getSelectedCourse();
+        List<String> hidden = hiddenCourses();
         for (String name : names) {
-            if (!name.isEmpty() && !courseNames.contains(name)) {
+            if (!name.isEmpty() && !hidden.contains(name) && !courseNames.contains(name)) {
                 courseNames.add(name);
                 changed = true;
             }
@@ -601,8 +623,9 @@ public class MainActivity extends Activity {
     private boolean serverNetworkAllowed(boolean showMessage) {
         if (TrustedNetworkManager.canContactServer(this, api.getBaseUrl())) return true;
         if (showMessage) {
-            uploadStatus.setText("Rete non fidata: il server non verrà contattato. Rendi fidata la rete Wi-Fi di casa.");
-            toast("Rete non fidata. Autorizza il Wi-Fi attuale prima di usare il server.");
+            String reason = TrustedNetworkManager.connectionBlockReason(this, api.getBaseUrl());
+            uploadStatus.setText("Connessione bloccata: " + reason);
+            toast(reason);
             refreshNetworkStatus();
         }
         return false;
@@ -622,6 +645,9 @@ public class MainActivity extends Activity {
         queueProgress.setVisibility(View.GONE);
         row.addView(queueProgress, new LinearLayout.LayoutParams(dp(32), dp(32)));
         queuePanel.addView(row, matchTop(dp(10)));
+        queueItemsContainer = new LinearLayout(this);
+        queueItemsContainer.setOrientation(LinearLayout.VERTICAL);
+        queuePanel.addView(queueItemsContainer);
 
         queueRetryButton = secondaryButton("Riprova caricamenti falliti");
         queueRetryButton.setVisibility(View.GONE);
@@ -643,6 +669,7 @@ public class MainActivity extends Activity {
             queueStatusView.setText("Nessun caricamento in sospeso.");
             queueProgress.setVisibility(View.GONE);
             queueRetryButton.setVisibility(View.GONE);
+            if (queueItemsContainer != null) queueItemsContainer.removeAllViews();
             return;
         }
         StringBuilder textValue = new StringBuilder();
@@ -656,6 +683,7 @@ public class MainActivity extends Activity {
         queueStatusView.setText(textValue.toString());
         queueProgress.setVisibility(pending > 0 ? View.VISIBLE : View.GONE);
         queueRetryButton.setVisibility(failed > 0 ? View.VISIBLE : View.GONE);
+        renderQueueItems();
     }
 
     private void registerQueueUpdates() {
@@ -701,6 +729,251 @@ public class MainActivity extends Activity {
         if (connectivityManager == null || networkCallback == null) return;
         try { connectivityManager.unregisterNetworkCallback(networkCallback); } catch (Exception ignored) {}
         networkCallback = null;
+    }
+
+    private void showReviewImagesDialog() {
+        if (selectedFiles.isEmpty()) {
+            toast("Nessuna immagine selezionata.");
+            return;
+        }
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(16), dp(8), dp(16), dp(8));
+        content.addView(text("L'ordine delle immagini sarà l'ordine delle pagine inviate all'AI.", 12, MUTED, Typeface.NORMAL));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Rivedi immagini")
+            .setView(new ScrollView(this) {{ addView(content); }})
+            .setNegativeButton("Chiudi", null)
+            .create();
+
+        for (int index = 0; index < selectedFiles.size(); index += 1) {
+            UploadPart part = selectedFiles.get(index);
+            final int position = index;
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, dp(8), 0, dp(8));
+
+            ImageView image = new ImageView(this);
+            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            image.setContentDescription("Immagine " + (index + 1));
+            try { image.setImageURI(part.uri); } catch (Exception ignored) {}
+            row.addView(image, new LinearLayout.LayoutParams(dp(72), dp(72)));
+
+            TextView name = text((index + 1) + ". " + part.fileName, 12, TEXT, Typeface.NORMAL);
+            LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            nameParams.setMarginStart(dp(10));
+            row.addView(name, nameParams);
+
+            Button up = smallButton("↑");
+            up.setContentDescription("Sposta su immagine " + (index + 1));
+            up.setEnabled(index > 0);
+            up.setOnClickListener(view -> {
+                Collections.swap(selectedFiles, position, position - 1);
+                renderSelectedFiles();
+                dialog.dismiss();
+                showReviewImagesDialog();
+            });
+            row.addView(up);
+
+            Button down = smallButton("↓");
+            down.setContentDescription("Sposta giù immagine " + (index + 1));
+            down.setEnabled(index < selectedFiles.size() - 1);
+            down.setOnClickListener(view -> {
+                Collections.swap(selectedFiles, position, position + 1);
+                renderSelectedFiles();
+                dialog.dismiss();
+                showReviewImagesDialog();
+            });
+            row.addView(down);
+
+            Button remove = smallButton("×");
+            remove.setContentDescription("Rimuovi immagine " + (index + 1));
+            remove.setOnClickListener(view -> {
+                selectedFiles.remove(position);
+                renderSelectedFiles();
+                dialog.dismiss();
+                if (!selectedFiles.isEmpty()) showReviewImagesDialog();
+            });
+            row.addView(remove);
+            content.addView(row);
+        }
+        dialog.show();
+    }
+
+    private List<String> hiddenCourses() {
+        List<String> result = new ArrayList<>();
+        try {
+            JSONArray array = new JSONArray(prefs.getString("hidden_courses_json", "[]"));
+            for (int i = 0; i < array.length(); i += 1) {
+                String value = array.optString(i, "").trim();
+                if (!value.isEmpty() && !result.contains(value)) result.add(value);
+            }
+        } catch (Exception ignored) {
+        }
+        return result;
+    }
+
+    private void saveHiddenCourses(List<String> values) {
+        JSONArray array = new JSONArray();
+        for (String value : values) array.put(value);
+        prefs.edit().putString("hidden_courses_json", array.toString()).apply();
+    }
+
+    private void hideCourse(String name) {
+        List<String> hidden = hiddenCourses();
+        if (!hidden.contains(name)) hidden.add(name);
+        saveHiddenCourses(hidden);
+    }
+
+    private void unhideCourse(String name) {
+        List<String> hidden = hiddenCourses();
+        hidden.remove(name);
+        saveHiddenCourses(hidden);
+    }
+
+    private void showManageCoursesDialog() {
+        List<String> available = new ArrayList<>();
+        for (String name : courseNames) {
+            if (!COURSE_PLACEHOLDER.equals(name)) available.add(name);
+        }
+        if (available.isEmpty()) {
+            toast("Non ci sono ancora corsi. Creane uno con + Corso.");
+            return;
+        }
+        String[] items = available.toArray(new String[0]);
+        new AlertDialog.Builder(this)
+            .setTitle("Gestisci corsi")
+            .setItems(items, (dialog, which) -> showCourseOptions(items[which]))
+            .setNegativeButton("Chiudi", null)
+            .show();
+    }
+
+    private void showCourseOptions(String course) {
+        String[] actions = {"Seleziona", "Rinomina", "Elimina"};
+        new AlertDialog.Builder(this)
+            .setTitle(course)
+            .setItems(actions, (dialog, which) -> {
+                if (which == 0) {
+                    int index = courseNames.indexOf(course);
+                    if (index > 0) courseSpinner.setSelection(index);
+                } else if (which == 1) {
+                    renameCourse(course);
+                } else {
+                    deleteCourse(course);
+                }
+            })
+            .setNegativeButton("Annulla", null)
+            .show();
+    }
+
+    private void renameCourse(String oldName) {
+        EditText input = editText("Nuovo nome corso", InputType.TYPE_CLASS_TEXT);
+        input.setText(oldName);
+        input.setPadding(dp(14), dp(10), dp(14), dp(10));
+        new AlertDialog.Builder(this)
+            .setTitle("Rinomina corso")
+            .setView(input)
+            .setNegativeButton("Annulla", null)
+            .setPositiveButton("Rinomina", (dialog, which) -> {
+                String newName = input.getText().toString().trim();
+                if (newName.isEmpty()) {
+                    toast("Inserisci un nome valido.");
+                    return;
+                }
+                if (!newName.equals(oldName) && courseNames.contains(newName)) {
+                    toast("Esiste già un corso con questo nome.");
+                    return;
+                }
+                int index = courseNames.indexOf(oldName);
+                if (index > 0) courseNames.set(index, newName);
+                if (oldName.equals(prefs.getString("selected_course", ""))) {
+                    prefs.edit().putString("selected_course", newName).apply();
+                }
+                hideCourse(oldName);
+                unhideCourse(newName);
+                saveCourses();
+                courseAdapter.notifyDataSetChanged();
+                int newIndex = courseNames.indexOf(newName);
+                if (newIndex > 0) courseSpinner.setSelection(newIndex);
+                toast("Corso rinominato.");
+            })
+            .show();
+    }
+
+    private void deleteCourse(String course) {
+        new AlertDialog.Builder(this)
+            .setTitle("Eliminare il corso?")
+            .setMessage(course + "\n\nLe note già generate sul server non verranno eliminate.")
+            .setNegativeButton("Annulla", null)
+            .setPositiveButton("Elimina", (dialog, which) -> {
+                courseNames.remove(course);
+                if (course.equals(prefs.getString("selected_course", ""))) {
+                    courseSpinner.setSelection(0);
+                    prefs.edit().remove("selected_course").apply();
+                }
+                hideCourse(course);
+                saveCourses();
+                courseAdapter.notifyDataSetChanged();
+                toast("Corso rimosso dall'elenco locale.");
+            })
+            .show();
+    }
+
+    private void renderQueueItems() {
+        if (queueItemsContainer == null) return;
+        queueItemsContainer.removeAllViews();
+        JSONArray queue = UploadQueueStore.read(this);
+        for (int i = 0; i < queue.length(); i += 1) {
+            JSONObject item = queue.optJSONObject(i);
+            if (item == null) continue;
+            String id = item.optString("id", "");
+            String status = item.optString("status", "pending");
+            String course = item.optString("course", "");
+            String title = item.optString("title", "");
+            int fileCount = item.optJSONArray("files") == null ? 0 : item.optJSONArray("files").length();
+            String displayTitle = !title.isEmpty() ? title : (!course.isEmpty() ? course : "Appunti");
+            if (!course.isEmpty() && !title.isEmpty()) displayTitle = title + " · " + course;
+
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(dp(10), dp(9), dp(10), dp(9));
+            GradientDrawable background = new GradientDrawable();
+            background.setColor(Color.rgb(247, 245, 255));
+            background.setCornerRadius(dp(10));
+            row.setBackground(background);
+            row.addView(text(displayTitle, 13, TEXT, Typeface.BOLD));
+            String statusLabel = "pending".equals(status) ? "In attesa di rete/server" : ("uploading".equals(status) ? "Caricamento in corso" : "Fallito");
+            row.addView(text(fileCount + (fileCount == 1 ? " immagine" : " immagini") + " · " + statusLabel, 11, "failed".equals(status) ? DANGER : MUTED, Typeface.NORMAL), matchTop(dp(3)));
+            String error = item.optString("error", "");
+            if (!error.isEmpty()) row.addView(text(error, 11, DANGER, Typeface.NORMAL), matchTop(dp(3)));
+
+            if (!"uploading".equals(status)) {
+                LinearLayout actions = new LinearLayout(this);
+                actions.setOrientation(LinearLayout.HORIZONTAL);
+                actions.setPadding(0, dp(6), 0, 0);
+                if ("failed".equals(status)) {
+                    Button retry = smallButton("Riprova");
+                    retry.setOnClickListener(view -> {
+                        UploadQueueStore.retryItem(this, id);
+                        refreshQueueStatus();
+                        if (serverNetworkAllowed(false)) UploadScheduler.schedule(this);
+                    });
+                    actions.addView(retry);
+                }
+                Button delete = smallButton("Elimina");
+                LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                deleteParams.setMarginStart(dp(8));
+                delete.setOnClickListener(view -> {
+                    UploadQueueStore.deleteItem(this, id);
+                    refreshQueueStatus();
+                });
+                actions.addView(delete, deleteParams);
+                row.addView(actions);
+            }
+            queueItemsContainer.addView(row, matchTop(dp(8)));
+        }
     }
 
     private void saveServerAndConnect() {

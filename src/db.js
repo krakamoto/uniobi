@@ -158,6 +158,16 @@ export function createStore(databasePath) {
     return { rows, total, page: safePage, limit: safeLimit };
   }
 
+  function stats() {
+    const rows = db.prepare('SELECT status, COUNT(*) AS count FROM jobs GROUP BY status').all();
+    const result = { total: 0 };
+    for (const row of rows) {
+      result[row.status] = Number(row.count);
+      result.total += Number(row.count);
+    }
+    return result;
+  }
+
   function listCourses() {
     return statements.courses.all();
   }
@@ -187,6 +197,7 @@ export function createStore(databasePath) {
     updateJob,
     listJobs,
     listCourses,
+    stats,
     insertVaultFile,
     getVaultFiles,
     listInterrupted,

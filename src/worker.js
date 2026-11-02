@@ -28,6 +28,7 @@ export function createWorker({ config, store }) {
   async function processJob(jobId) {
     const job = store.getJob(jobId);
     if (!job) throw new Error('Job non trovato.');
+    if (job.status === 'cancelled') return job;
     if (job.status === 'processing') return job;
 
     store.updateJob(jobId, {

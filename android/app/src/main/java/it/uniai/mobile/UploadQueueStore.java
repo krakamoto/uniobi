@@ -114,6 +114,30 @@ final class UploadQueueStore {
         write(context, queue);
     }
 
+    static synchronized void retryItem(Context context, String id) {
+        update(context, id, item -> {
+            try {
+                item.put("status", "pending");
+                item.put("error", "");
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    static synchronized void deleteItem(Context context, String id) {
+        JSONArray queue = read(context);
+        JSONArray next = new JSONArray();
+        for (int i = 0; i < queue.length(); i += 1) {
+            JSONObject item = queue.optJSONObject(i);
+            if (item != null && id.equals(item.optString("id"))) {
+                deleteLocalFiles(item);
+            } else if (item != null) {
+                next.put(item);
+            }
+        }
+        write(context, next);
+    }
+
     static synchronized void retryFailed(Context context) {
         JSONArray queue = read(context);
         for (int i = 0; i < queue.length(); i += 1) {

@@ -109,8 +109,57 @@ final class TrustedNetworkManager {
     static boolean canContactServer(Context context, String baseUrl) {
         String host = hostFromUrl(baseUrl);
         if (host.equals("10.0.2.2") || host.equals("127.0.0.1") || host.equals("localhost")) return true;
+        if (!isHttps(baseUrl) && !isPrivateHost(host)) return false;
         if (isOnVpn(context)) return true;
         return isCurrentWifiTrusted(context);
+    }
+
+    static String connectionBlockReason(Context context, String baseUrl) {
+        String host = hostFromUrl(baseUrl);
+        if (host.equals("10.0.2.2") || host.equals("127.0.0.1") || host.equals("localhost")) return "";
+        if (!isHttps(baseUrl) && !isPrivateHost(host)) {
+            return "HTTP è consentito solo verso server locali. Configura HTTPS o usa una VPN.";
+        }
+        if (isOnVpn(context)) return "";
+        if (!hasWifiPermission(context)) return "Concedi il permesso di localizzazione per identificare il Wi-Fi.";
+        if (!isOnWifi(context)) return "Nessun Wi-Fi connesso. Il server non verrà contattato.";
+        String ssid = currentSsid(context);
+        if (ssid.isEmpty()) return "SSID non disponibile. Attiva la posizione del telefono.";
+        if (!trustedSsids(context).contains(ssid)) return "La rete Wi-Fi attuale non è autorizzata.";
+        return "";
+    }
+
+    private static boolean isHttps(String baseUrl) {
+        try {
+            String value = String.valueOf(baseUrl == null ? "" : baseUrl).trim();
+            if (!value.startsWith("http://") && !value.startsWith("https://")) value = "http://" + value;
+            return "https".equalsIgnoreCase(URI.create(value).getScheme());
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static boolean isPrivateHost(String host) {
+        if (host == null || host.isEmpty()) return false;
+        if (host.equals("localhost") || host.endsWith(".local") || host.endsWith(".ts.net")) return true;
+        if (host.startsWith("10.") || host.startsWith("192.168.") || host.startsWith("169.254.")) return true;
+        if (host.startsWith("172.")) {
+            try {
+                int second = Integer.parseInt(host.split("\\.")[1]);
+                return second >= 16 && second <= 31;
+            } catch (Exception ignored) {
+                return false;
+            }
+        }
+        if (host.startsWith("100.")) {
+            try {
+                int second = Integer.parseInt(host.split("\\.")[1]);
+                return second >= 64 && second <= 127;
+            } catch (Exception ignored) {
+                return false;
+            }
+        }
+        return false;
     }
 
     static String currentNetworkLabel(Context context) {
