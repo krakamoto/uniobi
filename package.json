@@ -12,7 +12,9 @@
     "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
     "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1",
     "check": "node --check src/server.js && node --check src/app.js && node --check src/webdav.js && node --check src/vault-analysis.js && node --check src/figures.js && node --check src/ai/index.js && node --check src/cli/rebuild-vault-artifacts.js && node --check public/app.js",
-    "vault:indexes": "node --disable-warning=ExperimentalWarning src/cli/rebuild-vault-artifacts.js"
+    "vault:indexes": "node --disable-warning=ExperimentalWarning src/cli/rebuild-vault-artifacts.js",
+    "service:start": "./scripts/start-uniai.sh",
+    "service:stop": "./scripts/stop-uniai.sh"
   },
   "dependencies": {
     "express": "^5.1.0",

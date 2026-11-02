@@ -509,6 +509,43 @@ Un corso chiamato `Aerospace Dynamic Systems Analysis` verrà salvato in:
 uni/Uni/triennale/Aerospace Dynamic Systems Analysis/
 ```
 
+## Server sempre attivo
+
+Il server può essere gestito tramite un watchdog in una sessione `tmux`. Il watchdog:
+
+- avvia il backend se non è in esecuzione;
+- controlla `/api/health` ogni pochi secondi;
+- riavvia automaticamente Node se il processo termina o non risponde;
+- mantiene il server attivo anche dopo la chiusura del terminale.
+
+Avvio:
+
+```bash
+cd /home/giacomo/UniAi/uniai
+npm run service:start
+```
+
+Arresto:
+
+```bash
+npm run service:stop
+```
+
+Stato e log:
+
+```bash
+tmux ls
+tail -f /tmp/uniai.log
+```
+
+Ingresso nella sessione:
+
+```bash
+tmux attach -t uniai
+```
+
+> Questo ambiente non espone systemd/init completo, quindi il watchdog sopravvive alla chiusura del terminale ma non può essere registrato come servizio di boot tramite `systemctl`. Dopo un riavvio completo del container eseguire `npm run service:start`.
+
 ## Test
 
 ```bash
