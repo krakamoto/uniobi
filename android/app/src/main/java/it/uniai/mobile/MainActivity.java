@@ -1769,7 +1769,7 @@ public class MainActivity extends Activity {
         }
 
         if (!"processing".equals(status)) {
-            Button deleteActivity = smallButton("Elimina attività");
+            Button deleteActivity = smallButton("Rimuovi attività dalla cronologia");
             deleteActivity.setTextColor(DANGER);
             deleteActivity.setOnClickListener(view -> confirmDeleteActivity(id));
             content.addView(deleteActivity, matchTop(dp(16)));
@@ -1841,10 +1841,10 @@ public class MainActivity extends Activity {
 
     private void confirmDeleteActivity(String jobId) {
         new AlertDialog.Builder(this)
-            .setTitle("Eliminare l'attività?")
-            .setMessage("Verranno eliminate la nota generata, le figure ritagliate e le immagini caricate. Le note già salvate nel vault verranno rimosse automaticamente. L'operazione non può essere annullata.")
+            .setTitle("Rimuovere l'attività dalla cronologia?")
+            .setMessage("L'attività verrà rimossa solo dall'elenco dell'app. Le note e le figure già salvate nel vault Obsidian NON verranno cancellate. Le immagini originali caricate sul server verranno eliminate.")
             .setNegativeButton("Annulla", null)
-            .setPositiveButton("Elimina", (dialog, which) -> deleteActivity(jobId))
+            .setPositiveButton("Rimuovi", (dialog, which) -> deleteActivity(jobId))
             .show();
     }
 
@@ -1855,7 +1855,7 @@ public class MainActivity extends Activity {
                 ApiResponse response = api.delete("/api/jobs/" + jobId);
                 if (!response.isOk()) throw new IOException(response.errorMessage());
                 runOnUiThread(() -> {
-                    toast("Attività eliminata.");
+                    toast("Attività rimossa. Le note nel vault sono state conservate.");
                     loadJobs(true);
                     refreshQueueStatus();
                 });

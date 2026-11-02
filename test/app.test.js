@@ -139,8 +139,8 @@ test('flusso end-to-end: upload, analisi mock, salvataggio atomico nel vault', a
   assert.equal(deleteResponse.status, 200);
   const deletePayload = await deleteResponse.json();
   assert.equal(deletePayload.ok, true);
-  assert.ok(deletePayload.deletedVaultPaths.includes(savePayload.vaultPath));
-  assert.equal(existsSync(savedPath), false);
+  assert.equal(deletePayload.vaultFilesPreserved, true);
+  assert.equal(existsSync(savedPath), true);
   const deletedDetail = await fetch(`${baseUrl}/api/jobs/${jobId}`);
   assert.equal(deletedDetail.status, 404);
 

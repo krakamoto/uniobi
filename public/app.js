@@ -372,10 +372,10 @@ async function saveToVault(jobId) {
 }
 
 async function deleteJob(jobId) {
-  if (!window.confirm('Eliminare questa attività?\n\nVerranno rimosse le note generate, le figure ritagliate e le immagini caricate. Le note già salvate nel vault verranno cancellate automaticamente.')) return;
+  if (!window.confirm('Rimuovere questa attività dalla cronologia?\n\nLe note e le figure già salvate nel vault Obsidian NON verranno cancellate. Le immagini originali caricate sul server verranno eliminate.')) return;
   try {
     const data = await api(`/api/jobs/${jobId}`, { method: 'DELETE' });
-    showToast(data.message || 'Attività eliminata.', 'success');
+    showToast(data.message || 'Attività rimossa. Le note nel vault sono state conservate.', 'success');
     clearInterval(state.detailTimer);
     if ($('#job-dialog').open) $('#job-dialog').close();
     await loadJobs({ silent: true });
