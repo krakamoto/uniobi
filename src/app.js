@@ -398,14 +398,39 @@ export function createApp({ config, store, worker }) {
       const updatedResult = job.result_json
         ? { ...job.result_json, notes: materializedNotes, figures: materializedNotes.flatMap((note) => note.figures || []) }
         : job.result_json;
-      const updated = store.updateJob(job.id, {
+      store.updateJob(job.id, {
         markdown: materializedNotes[0]?.markdown || job.markdown,
         result_json: updatedResult,
         vault_path: saved[0]?.relativePath || null,
         vault_paths_json: saved.map((item) => item.relativePath),
         warnings_json: uniqueStrings([...(job.warnings_json || []), ...(req.body?.warnings || []), ...materializedNotes.flatMap((note) => note.warnings || [])])
       });
-      res.status(201).json({ ok: true, vaultPath: saved[0]?.relativePath || null, vaultPaths: saved.map((item) => item.relativePath), job: publicJob(updated) });
+
+      // Le note sono ora nel vault: l'attività può essere rimossa dalla cronologia
+      // e le immagini originali/risultato temporaneo possono essere eliminati dal server.
+      let autoRemoved = false;
+      let cleanupWarning = null;
+      try {
+        const uploadDirectory = path.resolve(config.uploadDir, job.id);
+        if (isPathInside(config.uploadDir, uploadDirectory)) {
+          rmSync(uploadDirectory, { recursive: true, force: true });
+        }
+        store.deleteJobCascade(job.id);
+        autoRemoved = true;
+      } catch (cleanupError) {
+        cleanupWarning = `Nota salvata, ma pulizia attività incompleta: ${cleanupError.message}`;
+      }
+
+      res.status(201).json({
+        ok: true,
+        vaultPath: saved[0]?.relativePath || null,
+        vaultPaths: saved.map((item) => item.relativePath),
+        autoRemoved,
+        cleanupWarning,
+        message: autoRemoved
+          ? 'Note salvate nel vault. Attività rimossa dalla cronologia e dati temporanei eliminati dal server.'
+          : 'Note salvate nel vault. Pulizia della cronologia non completata.'
+      });
     } catch (error) {
       res.status(500).json({ error: `Salvataggio nel vault fallito: ${error.message}` });
     }

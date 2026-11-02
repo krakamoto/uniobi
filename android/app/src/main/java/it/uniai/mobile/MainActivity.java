@@ -123,6 +123,7 @@ public class MainActivity extends Activity {
     private CheckBox networkCompatibilityCheck;
     private TextView serverTestStatus;
     private Button networkActionButton;
+    private AlertDialog activeJobDialog;
     private Button networkManageButton;
     private LinearLayout queuePanel;
     private LinearLayout queueItemsContainer;
@@ -1793,7 +1794,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        builder.show();
+        activeJobDialog = builder.show();
     }
 
     private void saveMarkdown(String jobId, EditText editor) {
@@ -1826,12 +1827,20 @@ public class MainActivity extends Activity {
                 if (!response.isOk()) throw new IOException(response.errorMessage());
                 JSONObject payload = new JSONObject(response.body);
                 JSONArray vaultPaths = payload.optJSONArray("vaultPaths");
-                String message = vaultPaths != null && vaultPaths.length() > 1
-                    ? vaultPaths.length() + " note salvate nel vault."
-                    : "Nota salvata: " + payload.optString("vaultPath", "");
+                String serverMessage = jsonString(payload, "message");
+                String message = serverMessage.isEmpty()
+                    ? (vaultPaths != null && vaultPaths.length() > 1
+                        ? vaultPaths.length() + " note salvate nel vault. Attività rimossa dalla cronologia."
+                        : "Nota salvata nel vault. Attività rimossa dalla cronologia.")
+                    : serverMessage;
                 runOnUiThread(() -> {
                     toast(message);
+                    if (activeJobDialog != null) {
+                        activeJobDialog.dismiss();
+                        activeJobDialog = null;
+                    }
                     loadJobs(true);
+                    refreshQueueStatus();
                 });
             } catch (Exception error) {
                 runOnUiThread(() -> toast(safeMessage(error)));
@@ -1842,7 +1851,7 @@ public class MainActivity extends Activity {
     private void confirmDeleteActivity(String jobId) {
         new AlertDialog.Builder(this)
             .setTitle("Rimuovere l'attività dalla cronologia?")
-            .setMessage("L'attività verrà rimossa solo dall'elenco dell'app. Le note e le figure già salvate nel vault Obsidian NON verranno cancellate. Le immagini originali caricate sul server verranno eliminate.")
+            .setMessage("Se l'attività non è ancora stata salvata, verranno eliminati dal server anche immagine, nota temporanea e dati di elaborazione. Le note e le figure già presenti nel vault Obsidian NON verranno cancellate.")
             .setNegativeButton("Annulla", null)
             .setPositiveButton("Rimuovi", (dialog, which) -> deleteActivity(jobId))
             .show();
@@ -1856,6 +1865,10 @@ public class MainActivity extends Activity {
                 if (!response.isOk()) throw new IOException(response.errorMessage());
                 runOnUiThread(() -> {
                     toast("Attività rimossa. Le note nel vault sono state conservate.");
+                    if (activeJobDialog != null) {
+                        activeJobDialog.dismiss();
+                        activeJobDialog = null;
+                    }
                     loadJobs(true);
                     refreshQueueStatus();
                 });

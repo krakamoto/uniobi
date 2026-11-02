@@ -128,21 +128,29 @@ test('flusso end-to-end: upload, analisi mock, salvataggio atomico nel vault', a
   assert.match(savedContent, /\[\[Analisi Matematica II\]\]/);
   assert.match(savedContent, /source: "UniAi"/);
 
-  const duplicateResponse = await fetch(`${baseUrl}/api/jobs/${jobId}/save-to-vault`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}'
-  });
-  assert.equal(duplicateResponse.status, 409);
-
-  const deleteResponse = await fetch(`${baseUrl}/api/jobs/${jobId}`, { method: 'DELETE' });
-  assert.equal(deleteResponse.status, 200);
-  const deletePayload = await deleteResponse.json();
-  assert.equal(deletePayload.ok, true);
-  assert.equal(deletePayload.vaultFilesPreserved, true);
+  assert.equal(savePayload.autoRemoved, true);
+  const removedAfterSave = await fetch(`${baseUrl}/api/jobs/${jobId}`);
+  assert.equal(removedAfterSave.status, 404);
   assert.equal(existsSync(savedPath), true);
-  const deletedDetail = await fetch(`${baseUrl}/api/jobs/${jobId}`);
-  assert.equal(deletedDetail.status, 404);
+
+  // Un job non ancora salvato viene eliminato completamente dal server.
+  const unsavedForm = new FormData();
+  unsavedForm.append('course', 'Analisi Matematica II');
+  unsavedForm.append('lessonDate', '2024-10-28');
+  unsavedForm.append('requestedTitle', 'Bozza da eliminare');
+  unsavedForm.append('files', new Blob([PNG_1X1], { type: 'image/png' }), 'bozza.png');
+  const unsavedUpload = await fetch(`${baseUrl}/api/uploads`, { method: 'POST', body: unsavedForm });
+  assert.equal(unsavedUpload.status, 202);
+  const unsavedId = (await unsavedUpload.json()).job.id;
+  await worker.waitForIdle();
+
+  const unsavedDelete = await fetch(`${baseUrl}/api/jobs/${unsavedId}`, { method: 'DELETE' });
+  assert.equal(unsavedDelete.status, 200);
+  const unsavedDeletePayload = await unsavedDelete.json();
+  assert.equal(unsavedDeletePayload.ok, true);
+  assert.equal(unsavedDeletePayload.vaultFilesPreserved, true);
+  const unsavedDetail = await fetch(`${baseUrl}/api/jobs/${unsavedId}`);
+  assert.equal(unsavedDetail.status, 404);
 
   // WebDAV: autenticazione, PROPFIND, PUT, GET e sincronizzazione bidirezionale col vault.
   const unauthorizedDav = await fetch(`${baseUrl}/webdav/`, { method: 'PROPFIND' });

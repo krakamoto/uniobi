@@ -241,7 +241,8 @@ L’app Android nativa si trova in `android/` e usa il backend UniAi come proxy 
 - modalità compatibilità rete locale per Android che non espongono SSID o impronta;
 - pulsante impostazioni nella barra superiore;
 - gestione completa dei corsi: creazione, selezione, rinomina ed eliminazione;
-- rimozione delle attività dalla cronologia mantenendo le note e le figure già salvate nel vault;
+- attività salvate rimosse automaticamente dalla cronologia, con pulizia di immagini e risultati temporanei dal server;
+- note e figure già salvate nel vault Obsidian sempre conservate;
 - revisione delle immagini selezionate con riordino e rimozione;
 - elenco dettagliato della coda con retry ed eliminazione dei singoli elementi;
 - blocco HTTP verso server pubblici non HTTPS;

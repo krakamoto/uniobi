@@ -362,8 +362,12 @@ async function saveToVault(jobId) {
     }
     const data = await api(`/api/jobs/${jobId}/save-to-vault`, { method: 'POST', body: '{}' });
     const savedPaths = Array.isArray(data.vaultPaths) ? data.vaultPaths : [];
-    showToast(savedPaths.length > 1 ? `${savedPaths.length} note salvate nel vault.` : `Nota salvata nel vault: ${data.vaultPath}`, 'success');
-    await refreshJob(jobId, true);
+    const fallbackMessage = savedPaths.length > 1
+      ? `${savedPaths.length} note salvate nel vault. Attività rimossa dalla cronologia.`
+      : `Nota salvata nel vault: ${data.vaultPath}. Attività rimossa dalla cronologia.`;
+    showToast(data.message || fallbackMessage, data.cleanupWarning ? 'warning' : 'success');
+    clearInterval(state.detailTimer);
+    if ($('#job-dialog').open) $('#job-dialog').close();
     await loadJobs({ silent: true });
   } catch (error) {
     showToast(error.message, 'error');
