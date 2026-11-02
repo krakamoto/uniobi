@@ -42,6 +42,11 @@ final class TrustedNetworkManager {
         return context.checkSelfPermission("android.permission.NEARBY_WIFI_DEVICES") == PackageManager.PERMISSION_GRANTED;
     }
 
+    static boolean hasLocalNetworkPermission(Context context) {
+        if (Build.VERSION.SDK_INT < 37) return true;
+        return context.checkSelfPermission("android.permission.ACCESS_LOCAL_NETWORK") == PackageManager.PERMISSION_GRANTED;
+    }
+
     static boolean hasWifiPermission(Context context) {
         return hasFineLocationPermission(context) && hasNearbyWifiPermission(context);
     }
@@ -239,6 +244,7 @@ final class TrustedNetworkManager {
 
     static boolean canContactServer(Context context, String baseUrl) {
         String host = hostFromUrl(baseUrl);
+        if (!hasLocalNetworkPermission(context)) return false;
         if (host.equals("10.0.2.2") || host.equals("127.0.0.1") || host.equals("localhost")) return true;
         if (!isHttps(baseUrl) && !isPrivateHost(host)) return false;
         if (isCompatibilityMode(context) && isOnWifi(context)) return true;
@@ -248,6 +254,7 @@ final class TrustedNetworkManager {
 
     static String connectionBlockReason(Context context, String baseUrl) {
         String host = hostFromUrl(baseUrl);
+        if (!hasLocalNetworkPermission(context)) return "Concedi il permesso Rete locale (Android 17+).";
         if (host.equals("10.0.2.2") || host.equals("127.0.0.1") || host.equals("localhost")) return "";
         if (!isHttps(baseUrl) && !isPrivateHost(host)) {
             return "HTTP è consentito solo verso server locali. Configura HTTPS o usa una VPN.";

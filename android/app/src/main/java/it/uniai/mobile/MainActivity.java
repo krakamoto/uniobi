@@ -774,6 +774,7 @@ public class MainActivity extends Activity {
         if (networkStatusView == null) return;
         boolean fineLocation = TrustedNetworkManager.hasFineLocationPermission(this);
         boolean nearbyWifi = TrustedNetworkManager.hasNearbyWifiPermission(this);
+        boolean localNetwork = TrustedNetworkManager.hasLocalNetworkPermission(this);
         boolean locationEnabled = TrustedNetworkManager.isLocationEnabled(this);
         String label = TrustedNetworkManager.currentNetworkLabel(this);
         if (topStatusView != null) {
@@ -790,8 +791,12 @@ public class MainActivity extends Activity {
         networkStatusView.setText("Rete attuale: " + label
             + "\nPermesso posizione precisa: " + (fineLocation ? "sì" : "no")
             + " · Permesso Wi-Fi: " + (nearbyWifi ? "sì" : "no")
+            + " · Permesso rete locale: " + (localNetwork ? "sì" : "no")
             + " · Posizione di sistema: " + (locationEnabled ? "attiva" : "disattiva"));
-        if (!fineLocation || !nearbyWifi) {
+        if (!localNetwork) {
+            networkActionButton.setText("Consenti accesso rete locale");
+            networkActionButton.setEnabled(true);
+        } else if (!fineLocation || !nearbyWifi) {
             networkActionButton.setText("Consenti accesso rete");
             networkActionButton.setEnabled(true);
         } else if (!locationEnabled && TrustedNetworkManager.isOnWifi(this)) {
@@ -828,7 +833,9 @@ public class MainActivity extends Activity {
     }
 
     private void onNetworkAction() {
-        if (!TrustedNetworkManager.hasFineLocationPermission(this) || !TrustedNetworkManager.hasNearbyWifiPermission(this)) {
+        if (!TrustedNetworkManager.hasFineLocationPermission(this)
+            || !TrustedNetworkManager.hasNearbyWifiPermission(this)
+            || !TrustedNetworkManager.hasLocalNetworkPermission(this)) {
             requestNetworkPermissions();
             return;
         }
@@ -905,11 +912,15 @@ public class MainActivity extends Activity {
 
     private void requestNetworkPermissions() {
         TrustedNetworkManager.markLocationPrompted(this);
-        if (Build.VERSION.SDK_INT >= 33) {
-            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES}, REQUEST_NETWORK_PERMISSIONS);
-        } else {
-            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_NETWORK_PERMISSIONS);
+        List<String> missing = new ArrayList<>();
+        if (!TrustedNetworkManager.hasFineLocationPermission(this)) missing.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        if (!TrustedNetworkManager.hasNearbyWifiPermission(this) && Build.VERSION.SDK_INT >= 33) missing.add("android.permission.NEARBY_WIFI_DEVICES");
+        if (!TrustedNetworkManager.hasLocalNetworkPermission(this)) missing.add("android.permission.ACCESS_LOCAL_NETWORK");
+        if (missing.isEmpty()) {
+            refreshNetworkStatus();
+            return;
         }
+        requestPermissions(missing.toArray(new String[0]), REQUEST_NETWORK_PERMISSIONS);
     }
 
     private void openLocationSettings() {
@@ -925,15 +936,16 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_NETWORK_PERMISSIONS) {
             refreshNetworkStatus();
-            if (TrustedNetworkManager.hasWifiPermission(this)) {
+            if (TrustedNetworkManager.hasWifiPermission(this) && TrustedNetworkManager.hasLocalNetworkPermission(this)) {
                 if (!TrustedNetworkManager.isLocationEnabled(this)) {
                     toast("Permesso concesso. Attiva ora la posizione di sistema per leggere l'SSID.");
                     openLocationSettings();
                 } else {
-                    toast("Permesso rete concesso. Ora puoi rendere fidata questa rete Wi-Fi.");
+                    toast("Permesso rete concesso. Ora puoi verificare la connessione al server.");
+                    if (serverNetworkAllowed(false)) checkServerAndAuth();
                 }
             } else {
-                toast("Servono sia la posizione precisa sia il permesso Dispositivi Wi-Fi vicini.");
+                toast("Servono posizione precisa, Dispositivi Wi-Fi vicini e permesso Rete locale.");
             }
         }
     }

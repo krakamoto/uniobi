@@ -2,7 +2,7 @@
 
 Client Android nativo per UniAi. Permette di scattare o selezionare foto degli appunti, caricarli sul server e salvare la nota generata da Gemini nel vault Obsidian.
 
-Versione: **2.0**
+Versione: **2.1**
 
 ## Build
 
@@ -56,6 +56,8 @@ L'app legge l'SSID del Wi-Fi corrente e contatta il backend solo se la rete è s
 - certificate pin TLS opzionale;
 - test strumentale di smoke test incluso;
 - tab Carica, Coda, Attività e Impostazioni.
+
+Su Android 17 è inoltre necessario concedere il permesso **Rete locale** (`ACCESS_LOCAL_NETWORK`). Senza questo permesso qualsiasi connessione a `192.168.x.x` viene bloccata dal sistema.
 
 Per leggere l'SSID su Android moderno servono contemporaneamente:
 - permesso di posizione precisa;

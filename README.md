@@ -237,6 +237,7 @@ L’app Android nativa si trova in `android/` e usa il backend UniAi come proxy 
 - anteprima e rimozione delle immagini;
 - interfaccia Android a tab: Carica, Coda, Attività e Impostazioni;
 - tema chiaro, scuro o automatico di sistema;
+- gestione del permesso Android 17 `ACCESS_LOCAL_NETWORK`;
 - modalità compatibilità rete locale per Android che non espongono SSID o impronta;
 - pulsante impostazioni nella barra superiore;
 - gestione completa dei corsi: creazione, selezione, rinomina ed eliminazione;
