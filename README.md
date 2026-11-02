@@ -244,6 +244,7 @@ L’app Android nativa si trova in `android/` e usa il backend UniAi come proxy 
 - coda locale persistente: le foto vengono compresse, salvate sul telefono e caricate automaticamente quando la rete e il server sono disponibili;
 - blocco delle reti Wi-Fi non fidate: l’app contatta il server solo da reti autorizzate, VPN o emulatori locali;
 - diagnostica dei permessi Android per posizione precisa, Dispositivi Wi-Fi vicini e posizione di sistema;
+- fallback di fiducia tramite impronta della rete locale quando Android non espone l’SSID;
 - retry automatico tramite `JobScheduler` e aggiornamento della UI;
 - ottimizzazione delle immagini prima dell’upload;
 - upload multipart con corso, data, titolo, tag e istruzioni;

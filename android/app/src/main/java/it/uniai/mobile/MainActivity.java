@@ -545,7 +545,14 @@ public class MainActivity extends Activity {
         } else {
             String ssid = TrustedNetworkManager.currentSsid(this);
             if (ssid.isEmpty()) {
-                networkActionButton.setText("Apri impostazioni posizione");
+                String fingerprint = TrustedNetworkManager.currentNetworkFingerprint(this);
+                if (fingerprint.isEmpty()) {
+                    networkActionButton.setText("Apri impostazioni posizione");
+                } else if (TrustedNetworkManager.trustedFingerprints(this).contains(fingerprint)) {
+                    networkActionButton.setText("Rimuovi fiducia dall'impronta rete");
+                } else {
+                    networkActionButton.setText("Autorizza impronta rete corrente");
+                }
                 networkActionButton.setEnabled(true);
             } else if (TrustedNetworkManager.trustedSsids(this).contains(ssid)) {
                 networkActionButton.setText("Rimuovi fiducia da questa rete");
@@ -555,7 +562,8 @@ public class MainActivity extends Activity {
                 networkActionButton.setEnabled(true);
             }
         }
-        networkManageButton.setVisibility(TrustedNetworkManager.trustedSsids(this).isEmpty() ? View.GONE : View.VISIBLE);
+        boolean hasTrusted = !TrustedNetworkManager.trustedSsids(this).isEmpty() || !TrustedNetworkManager.trustedFingerprints(this).isEmpty();
+        networkManageButton.setVisibility(hasTrusted ? View.VISIBLE : View.GONE);
     }
 
     private void onNetworkAction() {
@@ -568,19 +576,24 @@ public class MainActivity extends Activity {
             return;
         }
         String ssid = TrustedNetworkManager.currentSsid(this);
-        if (ssid.isEmpty()) {
-            toast("Android non espone l'SSID. Apri le impostazioni posizione e verifica che sia attiva.");
+        String fingerprint = TrustedNetworkManager.currentNetworkFingerprint(this);
+        if (ssid.isEmpty() && fingerprint.isEmpty()) {
+            toast("Android non espone l'SSID e non è possibile calcolare l'impronta della rete.");
             openLocationSettings();
             return;
         }
-        if (TrustedNetworkManager.trustedSsids(this).contains(ssid)) {
-            TrustedNetworkManager.removeTrustedSsid(this, ssid);
+        boolean trusted = (!ssid.isEmpty() && TrustedNetworkManager.trustedSsids(this).contains(ssid))
+            || (!fingerprint.isEmpty() && TrustedNetworkManager.trustedFingerprints(this).contains(fingerprint));
+        if (trusted) {
+            TrustedNetworkManager.forgetCurrentNetwork(this);
             toast("Rete rimossa dalle reti fidate.");
             refreshNetworkStatus();
             return;
         }
-        TrustedNetworkManager.addTrustedSsid(this, ssid);
-        toast("Rete fidata salvata: " + ssid);
+        TrustedNetworkManager.trustCurrentNetwork(this);
+        toast(ssid.isEmpty()
+            ? "Impronta rete autorizzata: " + TrustedNetworkManager.shortFingerprint(fingerprint)
+            : "Rete fidata salvata: " + ssid);
         refreshNetworkStatus();
         if (serverNetworkAllowed(false)) {
             UploadScheduler.schedule(this);
@@ -589,20 +602,38 @@ public class MainActivity extends Activity {
     }
 
     private void showTrustedNetworks() {
-        List<String> networks = TrustedNetworkManager.trustedSsids(this);
-        if (networks.isEmpty()) {
+        List<String> ssids = TrustedNetworkManager.trustedSsids(this);
+        List<String> fingerprints = TrustedNetworkManager.trustedFingerprints(this);
+        List<String> labels = new ArrayList<>();
+        List<String> types = new ArrayList<>();
+        List<String> values = new ArrayList<>();
+        for (String ssid : ssids) {
+            labels.add("Wi-Fi: " + ssid);
+            types.add("ssid");
+            values.add(ssid);
+        }
+        for (String fingerprint : fingerprints) {
+            labels.add("Impronta rete: " + TrustedNetworkManager.shortFingerprint(fingerprint));
+            types.add("fingerprint");
+            values.add(fingerprint);
+        }
+        if (labels.isEmpty()) {
             toast("Nessuna rete fidata configurata.");
             return;
         }
-        String[] items = networks.toArray(new String[0]);
+        String[] items = labels.toArray(new String[0]);
         new AlertDialog.Builder(this)
-            .setTitle("Reti Wi-Fi fidate")
+            .setTitle("Reti fidate")
             .setItems(items, (dialog, which) -> new AlertDialog.Builder(this)
-                .setTitle("Rimuovere la rete?")
+                .setTitle("Rimuovere questa fiducia?")
                 .setMessage(items[which])
                 .setNegativeButton("Annulla", null)
                 .setPositiveButton("Rimuovi", (confirm, ignored) -> {
-                    TrustedNetworkManager.removeTrustedSsid(this, items[which]);
+                    if ("ssid".equals(types.get(which))) {
+                        TrustedNetworkManager.removeTrustedSsid(this, values.get(which));
+                    } else {
+                        TrustedNetworkManager.removeTrustedFingerprint(this, values.get(which));
+                    }
                     refreshNetworkStatus();
                     toast("Rete rimossa.");
                 })

@@ -2,7 +2,7 @@
 
 Client Android nativo per UniAi. Permette di scattare o selezionare foto degli appunti, caricarli sul server e salvare la nota generata da Gemini nel vault Obsidian.
 
-Versione: **1.6**
+Versione: **1.7**
 
 ## Build
 
@@ -56,6 +56,8 @@ Per leggere l'SSID su Android moderno servono contemporaneamente:
 - posizione di sistema attiva.
 
 La schermata Rete Wi-Fi mostra lo stato dei tre requisiti e apre direttamente le impostazioni di sistema se la posizione è disattivata.
+
+Se Android 17 non espone l'SSID nonostante i permessi, l'app calcola un'impronta locale basata su interfaccia Wi-Fi, gateway, DNS e DHCP. L'utente può autorizzare esplicitamente questa impronta dalla schermata Rete Wi-Fi. L'impronta è una misura di affidabilità, non una garanzia crittografica: per la massima sicurezza usare HTTPS o una VPN.
 
 ## Sicurezza
 

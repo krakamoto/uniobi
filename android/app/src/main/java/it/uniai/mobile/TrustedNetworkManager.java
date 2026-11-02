@@ -7,7 +7,9 @@ import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
+import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
+import android.net.RouteInfo;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
@@ -15,12 +17,16 @@ import android.os.Build;
 import org.json.JSONArray;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 final class TrustedNetworkManager {
     private static final String PREFS = "uniai";
     private static final String KEY_TRUSTED_SSIDS = "trusted_wifi_ssids";
+    private static final String KEY_TRUSTED_FINGERPRINTS = "trusted_wifi_fingerprints";
     private static final String KEY_LOCATION_PROMPTED = "wifi_location_prompted";
 
     private TrustedNetworkManager() {
@@ -114,12 +120,107 @@ final class TrustedNetworkManager {
         save(context, values);
     }
 
+    static void trustCurrentNetwork(Context context) {
+        String ssid = currentSsid(context);
+        String fingerprint = currentNetworkFingerprint(context);
+        if (!ssid.isEmpty()) addTrustedSsid(context, ssid);
+        if (!fingerprint.isEmpty()) addTrustedFingerprint(context, fingerprint);
+    }
+
+    static void forgetCurrentNetwork(Context context) {
+        String ssid = currentSsid(context);
+        String fingerprint = currentNetworkFingerprint(context);
+        if (!ssid.isEmpty()) removeTrustedSsid(context, ssid);
+        if (!fingerprint.isEmpty()) removeTrustedFingerprint(context, fingerprint);
+    }
+
     private static void save(Context context, List<String> values) {
         JSONArray array = new JSONArray();
         for (String value : values) array.put(value);
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_TRUSTED_SSIDS, array.toString())
             .apply();
+    }
+
+    static String currentNetworkFingerprint(Context context) {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return "";
+            Network network = cm.getActiveNetwork();
+            if (network == null) return "";
+            NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+            if (caps == null || !caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return "";
+            LinkProperties properties = cm.getLinkProperties(network);
+            if (properties == null) return "";
+            StringBuilder raw = new StringBuilder("wifi");
+            raw.append('|').append(properties.getInterfaceName() == null ? "" : properties.getInterfaceName());
+            for (RouteInfo route : properties.getRoutes()) {
+                if (route.isDefaultRoute() && route.getGateway() != null) {
+                    raw.append("|gw:").append(route.getGateway().getHostAddress());
+                }
+            }
+            ArrayList<String> dns = new ArrayList<>();
+            for (java.net.InetAddress address : properties.getDnsServers()) dns.add(address.getHostAddress());
+            Collections.sort(dns);
+            raw.append("|dns:").append(String.join(",", dns));
+            if (Build.VERSION.SDK_INT >= 30 && properties.getDhcpServerAddress() != null) {
+                raw.append("|dhcp:").append(properties.getDhcpServerAddress().getHostAddress());
+            }
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(raw.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < 8; i += 1) hex.append(String.format("%02x", hash[i]));
+            return hex.toString();
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    static List<String> trustedFingerprints(Context context) {
+        List<String> result = new ArrayList<>();
+        try {
+            JSONArray array = new JSONArray(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_TRUSTED_FINGERPRINTS, "[]"));
+            for (int i = 0; i < array.length(); i += 1) {
+                String value = array.optString(i, "").trim();
+                if (!value.isEmpty() && !result.contains(value)) result.add(value);
+            }
+        } catch (Exception ignored) {
+        }
+        return result;
+    }
+
+    private static void saveFingerprints(Context context, List<String> values) {
+        JSONArray array = new JSONArray();
+        for (String value : values) array.put(value);
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_TRUSTED_FINGERPRINTS, array.toString()).apply();
+    }
+
+    static void addTrustedFingerprint(Context context, String fingerprint) {
+        String clean = fingerprint == null ? "" : fingerprint.trim();
+        if (clean.isEmpty()) return;
+        List<String> values = trustedFingerprints(context);
+        if (!values.contains(clean)) values.add(clean);
+        saveFingerprints(context, values);
+    }
+
+    static void removeTrustedFingerprint(Context context, String fingerprint) {
+        List<String> values = trustedFingerprints(context);
+        values.remove(fingerprint);
+        saveFingerprints(context, values);
+    }
+
+    static boolean isCurrentFingerprintTrusted(Context context) {
+        String fingerprint = currentNetworkFingerprint(context);
+        return !fingerprint.isEmpty() && trustedFingerprints(context).contains(fingerprint);
+    }
+
+    static boolean isCurrentNetworkTrusted(Context context) {
+        return isCurrentWifiTrusted(context) || isCurrentFingerprintTrusted(context);
+    }
+
+    static String shortFingerprint(String fingerprint) {
+        if (fingerprint == null || fingerprint.length() <= 8) return fingerprint == null ? "" : fingerprint;
+        return fingerprint.substring(0, 8).toUpperCase();
     }
 
     static boolean isCurrentWifiTrusted(Context context) {
@@ -132,7 +233,7 @@ final class TrustedNetworkManager {
         if (host.equals("10.0.2.2") || host.equals("127.0.0.1") || host.equals("localhost")) return true;
         if (!isHttps(baseUrl) && !isPrivateHost(host)) return false;
         if (isOnVpn(context)) return true;
-        return isCurrentWifiTrusted(context);
+        return isCurrentNetworkTrusted(context);
     }
 
     static String connectionBlockReason(Context context, String baseUrl) {
@@ -146,10 +247,14 @@ final class TrustedNetworkManager {
         if (!hasNearbyWifiPermission(context)) return "Concedi il permesso Dispositivi Wi-Fi vicini (Android 13+).";
         if (!isLocationEnabled(context)) return "La posizione di sistema è disattivata: attivala nelle impostazioni Android.";
         if (!isOnWifi(context)) return "Nessun Wi-Fi connesso. Il server non verrà contattato.";
+        if (isCurrentNetworkTrusted(context)) return "";
         String ssid = currentSsid(context);
-        if (ssid.isEmpty()) return "Android non espone l'SSID. Controlla posizione e permessi Wi-Fi.";
-        if (!trustedSsids(context).contains(ssid)) return "La rete Wi-Fi attuale non è autorizzata.";
-        return "";
+        if (ssid.isEmpty()) {
+            String fingerprint = currentNetworkFingerprint(context);
+            if (fingerprint.isEmpty()) return "Android non espone l'SSID e la rete non è identificabile.";
+            return "SSID non disponibile: autorizza l'impronta della rete corrente.";
+        }
+        return "La rete Wi-Fi attuale non è autorizzata.";
     }
 
     private static boolean isHttps(String baseUrl) {
@@ -190,8 +295,13 @@ final class TrustedNetworkManager {
         if (isOnVpn(context)) return "VPN attiva";
         if (!isOnWifi(context)) return "Nessun Wi-Fi connesso";
         String ssid = currentSsid(context);
-        if (ssid.isEmpty()) return "Wi-Fi connesso · SSID non disponibile (attiva la posizione)";
-        return isCurrentWifiTrusted(context) ? ssid + " · rete fidata" : ssid + " · rete NON fidata";
+        if (!ssid.isEmpty()) {
+            return isCurrentNetworkTrusted(context) ? ssid + " · rete fidata" : ssid + " · rete NON fidata";
+        }
+        String fingerprint = currentNetworkFingerprint(context);
+        if (fingerprint.isEmpty()) return "Wi-Fi connesso · rete non identificabile";
+        return "Wi-Fi connesso · SSID non disponibile · impronta " + shortFingerprint(fingerprint)
+            + (isCurrentFingerprintTrusted(context) ? " · rete fidata" : " · rete NON fidata");
     }
 
     static boolean hasLocationPrompted(Context context) {
