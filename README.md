@@ -10,10 +10,20 @@ UniAi è una web app self-hosted con app Android nativa che trasforma le foto de
 4. Genera una nota Markdown con frontmatter YAML, tag, riassunto, formule LaTeX e callout Obsidian.
 5. Verifica i wikilink rispetto alle note realmente presenti nel vault.
 6. Mostra un’anteprima modificabile e, su conferma, salva la nota nel vault con scrittura atomica e senza sovrascrivere file esistenti.
-7. Conserva uno storico delle elaborazioni con stati, errori, retry e percorso del file salvato.
+7. Mostra una cronologia temporanea delle elaborazioni con stati, errori e retry. Dopo il salvataggio nel vault l’attività viene rimossa automaticamente e i dati temporanei del server vengono eliminati.
 8. Include un’app Android per scattare o selezionare foto dal telefono, caricarle sul server e rivedere/salvare la nota Obsidian.
 
 L’app funziona subito in **modalità mock**, utile per provare il flusso senza chiavi API. Per l’analisi reale delle immagini configura un provider visione.
+
+## Documentazione
+
+- [Architettura e ciclo di vita delle attività](docs/ARCHITECTURE.md)
+- [Release e versioni conservate](docs/RELEASES.md)
+- [Prompt di sviluppo](docs/prompts/README.md)
+- [App Android](android/README.md)
+- [Deploy e HTTPS](deploy/README.md)
+- [Script del server](scripts/README.md)
+- [Changelog](CHANGELOG.md)
 
 ## Requisiti
 
@@ -303,7 +313,7 @@ BUILD SUCCESSFUL
 APK: android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-La build è stata eseguita con Gradle 8.10.2, AGP 8.7.3, JDK 17 e Android SDK 35. Non era disponibile un dispositivo/emulatore collegato per un test UI manuale.
+La build è stata eseguita con Gradle 8.10.2, AGP 8.7.3, JDK 17 e Android SDK 35. L’app è stata installata e verificata anche su Pixel 7 Pro con Android 17 (SDK 37), inclusi permesso `ACCESS_LOCAL_NETWORK`, connessione al server e coda upload.
 
 ### Sicurezza della rete Android
 
@@ -311,7 +321,15 @@ L’app Android non contatta il server su una rete Wi-Fi qualsiasi. Prima di eff
 
 1. verifica la rete attiva;
 2. legge l’SSID del Wi-Fi corrente;
-3. confronta l’SSID con l’elenco delle reti fidate salvate sul telefono.
+3. se l’SSID non è disponibile, usa l’impronta locale della rete;
+4. confronta il risultato con le reti autorizzate sul telefono.
+
+Su Android 17 servono:
+
+- permesso posizione precisa;
+- permesso Dispositivi Wi-Fi vicini;
+- permesso `ACCESS_LOCAL_NETWORK`;
+- posizione di sistema attiva.
 
 L’accesso è consentito solo se:
 
@@ -319,7 +337,7 @@ L’accesso è consentito solo se:
 - oppure è attiva una VPN;
 - oppure si sta usando un emulatore con indirizzo locale `10.0.2.2` / `127.0.0.1`.
 
-Per leggere l’SSID, Android richiede il permesso di localizzazione. L’app lo richiede esplicitamente e non usa la posizione per altri scopi.
+La modalità compatibilità rete locale consente esplicitamente l’accesso a un server privato su Wi-Fi quando Android non espone un’identità stabile. HTTP pubblico resta bloccato.
 
 Nella schermata **Rete Wi-Fi** si può:
 
@@ -634,6 +652,10 @@ L’esecuzione su dispositivo richiede:
 ./gradlew connectedDebugAndroidTest
 ```
 
+## Release
+
+Sono conservate solo le release più significative. La policy e i download sono descritti in [docs/RELEASES.md](docs/RELEASES.md).
+
 ## Docker
 
 ```bash
@@ -654,36 +676,32 @@ All’interno del container `OBSIDIAN_VAULT_PATH=/vault`. Assicurati che il proc
 
 ```text
 uniai/
-├── public/
-│   ├── index.html
-│   ├── app.js
-│   └── styles.css
-├── src/
-│   ├── ai/
-│   │   ├── index.js
-│   │   ├── mock.js
-│   │   ├── ollama.js
-│   │   └── openai.js
-│   ├── app.js          # API Express
-│   ├── config.js       # Configurazione da ambiente
-│   ├── db.js           # SQLite e job
-│   ├── markdown.js     # Frontmatter, link e template
-│   ├── server.js       # Bootstrap
-│   ├── utils.js        # Path e sanitizzazione
-│   ├── vault.js        # Scansione e salvataggio Obsidian
-│   └── worker.js       # Coda di elaborazione
-├── android/
+├── android/                 # App Android nativa
 │   ├── app/src/main/java/it/uniai/mobile/
-│   │   ├── MainActivity.java
-│   │   └── ApiClient.java
-│   ├── app/src/main/AndroidManifest.xml
-│   ├── gradlew
-│   └── app/build/outputs/apk/debug/app-debug.apk
-├── test/
-│   └── app.test.js
-├── data/               # Runtime: upload e database
-├── obsidian-vault/     # Vault demo locale
-├── .env.example
+│   ├── app/src/androidTest/ # Smoke test strumentale
+│   └── README.md
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── RELEASES.md
+│   └── prompts/
+├── deploy/                  # Caddyfile e note di deploy
+├── public/                  # Web UI
+├── scripts/                 # Avvio, stop e watchdog
+├── src/
+│   ├── ai/                  # Gemini, OpenAI-compatibile, Ollama, mock
+│   ├── app.js               # API Express
+│   ├── db.js                # SQLite e job
+│   ├── figures.js           # Ritaglio figure
+│   ├── markdown.js          # Frontmatter e template
+│   ├── server.js            # Bootstrap HTTP/HTTPS
+│   ├── vault.js             # Salvataggio Obsidian
+│   ├── vault-analysis.js    # Materie, contesto e indici
+│   ├── webdav.js            # Sincronizzazione Obsidian Mobile
+│   └── worker.js            # Coda di elaborazione
+├── test/                    # Test backend
+├── data/                    # Runtime: upload e database (ignorati da Git)
+├── obsidian-vault/          # Vault demo locale (ignorato da Git)
+├── CHANGELOG.md
 ├── Dockerfile
 ├── docker-compose.yml
 └── package.json
@@ -693,12 +711,12 @@ uniai/
 
 - L’OCR dipende dal modello visione scelto: non è incluso un motore OCR locale separato. Con `AI_PROVIDER=mock` non viene trascritto il contenuto reale delle immagini.
 - Il provider Gemini richiede una chiave API e non è stato possibile eseguire una chiamata reale nell’ambiente di build. Il provider è coperto da test con risposta mock.
-- L’APK Android è stato compilato, ma non testato su un dispositivo fisico perché non era collegato alcun telefono/emulatore.
 - La coda è in-process: se il server si riavvia durante un job, il job viene marcato come fallito e va riavviato con **Riprova**.
 - Il database è SQLite, adatto a uso personale o a un piccolo gruppo.
 - La ricerca delle note nel vault è ricorsiva ma non usa embeddings: il matching dei wikilink si basa su titoli, alias, menzioni e link proposti dal modello.
 - Le sessioni di login sono in memoria e decadono al riavvio del server.
-- Non è incluso un reverse proxy TLS: per un’esposizione pubblica usa Nginx/Caddy e `APP_PASSWORD`.
+- L’analisi AI reale dipende dalla disponibilità e dalla quota del provider configurato.
+- Per l’esposizione pubblica usare HTTPS con Caddy/Node e `APP_PASSWORD`; il certificate pin Android è opzionale.
 
 ## Prossimi passi consigliati
 
