@@ -4,16 +4,21 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -49,6 +54,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -88,6 +94,13 @@ public class MainActivity extends Activity {
     private TextView uploadStatus;
     private Button uploadButton;
     private ProgressBar uploadProgress;
+    private LinearLayout queuePanel;
+    private TextView queueStatusView;
+    private ProgressBar queueProgress;
+    private Button queueRetryButton;
+    private BroadcastReceiver queueReceiver;
+    private ConnectivityManager connectivityManager;
+    private ConnectivityManager.NetworkCallback networkCallback;
     private boolean passwordRequired;
     private boolean authenticated = true;
     private boolean creatingCameraFile;
@@ -106,14 +119,20 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("uniai", Context.MODE_PRIVATE);
         api = new ApiClient(prefs.getString("server_url", "http://10.0.2.2:3000"));
         api.setCookie(prefs.getString("session_cookie", ""));
+        UploadQueueStore.requeueUploading(this);
         buildUi();
         loadCourses();
+        refreshQueueStatus();
         checkServerAndAuth();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        registerQueueUpdates();
+        registerNetworkUpdates();
+        refreshQueueStatus();
+        if (UploadQueueStore.pendingCount(this) > 0) UploadScheduler.schedule(this);
         handler.removeCallbacks(pollRunnable);
         handler.postDelayed(pollRunnable, 6000);
     }
@@ -121,6 +140,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         handler.removeCallbacks(pollRunnable);
+        unregisterQueueUpdates();
+        unregisterNetworkUpdates();
         super.onPause();
     }
 
@@ -159,6 +180,7 @@ public class MainActivity extends Activity {
         root.addView(loginCard, matchTop(dp(12)));
 
         root.addView(uploadCard(), matchTop(dp(14)));
+        root.addView(queueCard(), matchTop(dp(14)));
 
         LinearLayout historyHeader = new LinearLayout(this);
         historyHeader.setOrientation(LinearLayout.HORIZONTAL);
@@ -210,7 +232,7 @@ public class MainActivity extends Activity {
     private View uploadCard() {
         LinearLayout card = card();
         card.addView(text("Nuova lezione", 20, TEXT, Typeface.BOLD));
-        card.addView(text("Seleziona o scatta fino a 10 foto. Verranno caricate tutte in una sola elaborazione.", 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+        card.addView(text("Seleziona più foto dalla galleria o scatta con la fotocamera. Le foto vengono salvate localmente e caricate automaticamente appena il server è raggiungibile.", 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
 
         LinearLayout sourceButtons = new LinearLayout(this);
         sourceButtons.setOrientation(LinearLayout.HORIZONTAL);
@@ -282,7 +304,7 @@ public class MainActivity extends Activity {
         LinearLayout actionRow = new LinearLayout(this);
         actionRow.setOrientation(LinearLayout.HORIZONTAL);
         actionRow.setGravity(Gravity.CENTER_VERTICAL);
-        uploadButton = primaryButton("Carica e analizza");
+        uploadButton = primaryButton("Metti in coda");
         uploadButton.setOnClickListener(view -> uploadNotes());
         actionRow.addView(uploadButton, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         uploadProgress = new ProgressBar(this);
@@ -290,7 +312,7 @@ public class MainActivity extends Activity {
         actionRow.addView(uploadProgress, new LinearLayout.LayoutParams(dp(34), dp(34)));
         card.addView(actionRow, matchTop(dp(16)));
 
-        uploadStatus = text("", 12, MUTED, Typeface.NORMAL);
+        uploadStatus = text("Le foto vengono salvate sul telefono e caricate automaticamente quando il server è raggiungibile.", 12, MUTED, Typeface.NORMAL);
         card.addView(uploadStatus, matchTop(dp(6)));
         return card;
     }
@@ -441,6 +463,98 @@ public class MainActivity extends Activity {
         if (index > 0) courseSpinner.setSelection(index);
     }
 
+    private View queueCard() {
+        queuePanel = card();
+        queuePanel.addView(text("Coda di caricamento", 20, TEXT, Typeface.BOLD));
+        queuePanel.addView(text("Le foto restano sul telefono e vengono inviate automaticamente quando la rete e il server sono disponibili.", 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        queueStatusView = text("Nessun caricamento in sospeso.", 13, MUTED, Typeface.NORMAL);
+        row.addView(queueStatusView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        queueProgress = new ProgressBar(this);
+        queueProgress.setVisibility(View.GONE);
+        row.addView(queueProgress, new LinearLayout.LayoutParams(dp(32), dp(32)));
+        queuePanel.addView(row, matchTop(dp(10)));
+
+        queueRetryButton = secondaryButton("Riprova caricamenti falliti");
+        queueRetryButton.setVisibility(View.GONE);
+        queueRetryButton.setOnClickListener(view -> {
+            UploadQueueStore.retryFailed(this);
+            refreshQueueStatus();
+            UploadScheduler.schedule(this);
+            toast("Coda riattivata.");
+        });
+        queuePanel.addView(queueRetryButton, matchTop(dp(8)));
+        return queuePanel;
+    }
+
+    private void refreshQueueStatus() {
+        if (queueStatusView == null) return;
+        int pending = UploadQueueStore.pendingCount(this);
+        int failed = UploadQueueStore.failedCount(this);
+        if (pending == 0 && failed == 0) {
+            queueStatusView.setText("Nessun caricamento in sospeso.");
+            queueProgress.setVisibility(View.GONE);
+            queueRetryButton.setVisibility(View.GONE);
+            return;
+        }
+        StringBuilder textValue = new StringBuilder();
+        if (pending > 0) textValue.append(pending).append(pending == 1 ? " caricamento in attesa" : " caricamenti in attesa");
+        if (failed > 0) {
+            if (textValue.length() > 0) textValue.append(" · ");
+            textValue.append(failed).append(failed == 1 ? " fallito" : " falliti");
+            String lastError = UploadQueueStore.lastError(this);
+            if (!lastError.isEmpty()) textValue.append("\n").append(lastError);
+        }
+        queueStatusView.setText(textValue.toString());
+        queueProgress.setVisibility(pending > 0 ? View.VISIBLE : View.GONE);
+        queueRetryButton.setVisibility(failed > 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private void registerQueueUpdates() {
+        if (queueReceiver != null) return;
+        queueReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                refreshQueueStatus();
+                loadJobs(true);
+            }
+        };
+        IntentFilter filter = new IntentFilter(UploadQueueStore.ACTION_QUEUE_UPDATED);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(queueReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        else registerReceiver(queueReceiver, filter);
+    }
+
+    private void unregisterQueueUpdates() {
+        if (queueReceiver == null) return;
+        try { unregisterReceiver(queueReceiver); } catch (Exception ignored) {}
+        queueReceiver = null;
+    }
+
+    private void registerNetworkUpdates() {
+        if (networkCallback != null) return;
+        connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (connectivityManager == null) return;
+        networkCallback = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(Network network) {
+                runOnUiThread(() -> {
+                    refreshQueueStatus();
+                    if (UploadQueueStore.pendingCount(MainActivity.this) > 0) UploadScheduler.schedule(MainActivity.this);
+                });
+            }
+        };
+        try { connectivityManager.registerDefaultNetworkCallback(networkCallback); } catch (Exception ignored) {}
+    }
+
+    private void unregisterNetworkUpdates() {
+        if (connectivityManager == null || networkCallback == null) return;
+        try { connectivityManager.unregisterNetworkCallback(networkCallback); } catch (Exception ignored) {}
+        networkCallback = null;
+    }
+
     private void saveServerAndConnect() {
         String value = serverUrlInput.getText().toString().trim();
         if (value.isEmpty()) {
@@ -472,6 +586,8 @@ public class MainActivity extends Activity {
                     if (authenticated) {
                         loadJobs(true);
                         fetchServerCourses();
+                        if (UploadQueueStore.pendingCount(MainActivity.this) > 0) UploadScheduler.schedule(MainActivity.this);
+                        refreshQueueStatus();
                     }
                 });
             } catch (Exception error) {
@@ -503,6 +619,7 @@ public class MainActivity extends Activity {
                     authenticated = true;
                     toast("Accesso effettuato.");
                     checkServerAndAuth();
+                    UploadScheduler.schedule(MainActivity.this);
                 });
             } catch (Exception error) {
                 runOnUiThread(() -> toast(safeMessage(error)));
@@ -511,6 +628,16 @@ public class MainActivity extends Activity {
     }
 
     private void pickImages() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            try {
+                Intent picker = new Intent(MediaStore.ACTION_PICK_IMAGES);
+                picker.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, 10);
+                startActivityForResult(picker, REQUEST_PICK_IMAGES);
+                return;
+            } catch (ActivityNotFoundException ignored) {
+                // Fallback al selettore documenti.
+            }
+        }
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("image/*");
@@ -608,36 +735,45 @@ public class MainActivity extends Activity {
             return;
         }
         if (!authenticated && passwordRequired) {
-            toast("Accedi prima di caricare gli appunti.");
+            toast("Accedi prima di mettere gli appunti in coda.");
             loginCard.setVisibility(View.VISIBLE);
             return;
         }
+
         List<UploadPart> files = new ArrayList<>(selectedFiles);
-        Map<String, String> fields = new LinkedHashMap<>();
-        fields.put("course", getSelectedCourse());
-        fields.put("lesson_date", dateInput.getText().toString().trim());
-        fields.put("title", titleInput.getText().toString().trim());
-        fields.put("tags", tagsInput.getText().toString().trim());
-        fields.put("user_notes", notesInput.getText().toString().trim());
+        String course = getSelectedCourse();
+        String lessonDate = dateInput.getText().toString().trim();
+        String title = titleInput.getText().toString().trim();
+        String tags = tagsInput.getText().toString().trim();
+        String userNotes = notesInput.getText().toString().trim();
+        String queueId = UUID.randomUUID().toString();
 
         uploadButton.setEnabled(false);
         uploadProgress.setVisibility(View.VISIBLE);
-        uploadStatus.setText("Caricamento di " + files.size() + (files.size() == 1 ? " immagine…" : " immagini…"));
+        uploadStatus.setText("Ottimizzazione e salvataggio locale di " + files.size() + (files.size() == 1 ? " immagine…" : " immagini…"));
 
         executor.execute(() -> {
             try {
-                ApiResponse response = api.upload("/api/uploads", getContentResolver(), fields, files);
-                if (response.code == 401) {
-                    runOnUiThread(() -> {
-                        authenticated = false;
-                        loginCard.setVisibility(View.VISIBLE);
-                        toast("Sessione scaduta: effettua di nuovo l'accesso.");
-                    });
-                    return;
+                List<Uri> uris = new ArrayList<>();
+                for (UploadPart file : files) uris.add(file.uri);
+                List<PreparedImage> prepared = ImagePreparer.prepare(MainActivity.this, uris, queueId);
+                JSONArray fileArray = new JSONArray();
+                for (PreparedImage image : prepared) {
+                    JSONObject file = new JSONObject();
+                    file.put("path", image.file.getAbsolutePath());
+                    file.put("name", image.fileName);
+                    file.put("mimeType", image.mimeType);
+                    fileArray.put(file);
                 }
-                if (!response.isOk()) throw new IOException(response.errorMessage());
-                JSONObject payload = new JSONObject(response.body);
-                String jobId = payload.optJSONObject("job") == null ? "" : payload.getJSONObject("job").optString("id");
+                JSONObject item = new JSONObject();
+                item.put("course", course);
+                item.put("lesson_date", lessonDate);
+                item.put("title", title);
+                item.put("tags", tags);
+                item.put("user_notes", userNotes);
+                item.put("files", fileArray);
+                UploadQueueStore.enqueue(MainActivity.this, item);
+                UploadScheduler.schedule(MainActivity.this);
                 runOnUiThread(() -> {
                     selectedFiles.clear();
                     renderSelectedFiles();
@@ -645,9 +781,9 @@ public class MainActivity extends Activity {
                     titleInput.setText("");
                     tagsInput.setText("");
                     notesInput.setText("");
-                    uploadStatus.setText("Elaborazione avviata. La nota apparirà nello storico.");
-                    toast("Caricamento completato: analisi avviata.");
-                    loadJobs(true);
+                    uploadStatus.setText("Foto salvate nella coda locale. Il caricamento partirà automaticamente appena il server sarà raggiungibile.");
+                    refreshQueueStatus();
+                    toast("Foto aggiunte alla coda: verranno caricate appena possibile.");
                 });
             } catch (Exception error) {
                 runOnUiThread(() -> {

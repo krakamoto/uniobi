@@ -232,11 +232,15 @@ L’app Android nativa si trova in `android/` e usa il backend UniAi come proxy 
 
 - configurazione dell’URL del server;
 - login opzionale con `APP_PASSWORD`;
-- fotocamera e selezione multipla dalla galleria;
+- selezione multipla dalla galleria con Photo Picker e fallback al selettore documenti;
+- fotocamera;
 - anteprima e rimozione delle immagini;
 - gestione dei corsi: creazione, salvataggio locale e selezione da menu;
 - importazione automatica dei corsi già presenti sul backend;
 - data lezione opzionale;
+- coda locale persistente: le foto vengono compresse, salvate sul telefono e caricate automaticamente quando la rete e il server sono disponibili;
+- retry automatico tramite `JobScheduler` e aggiornamento della UI;
+- ottimizzazione delle immagini prima dell’upload;
 - upload multipart con corso, data, titolo, tag e istruzioni;
 - storico delle elaborazioni con aggiornamento automatico;
 - dettaglio con Markdown modificabile, warning e wikilink;
