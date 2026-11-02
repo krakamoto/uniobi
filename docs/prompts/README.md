@@ -6,6 +6,7 @@ Prompt riutilizzabili per evolvere il progetto in modo coerente.
 - [App Android e Antigravity](android-antigravity.md) — requisiti iniziali del client Android.
 - [Corsi e numerazione](android-courses-numbering.md) — gestione corsi e nomi numerati.
 - [Divisione multi-nota](multinote-split.md) — suddivisione di una lezione in più note.
+- [Resilienza server](server-resilience.md) — watchdog, health check, systemd e riavvio automatico.
 
 ## Regole per nuovi prompt
 

@@ -22,3 +22,22 @@ Per l’accesso da rete esterna preferisci Tailscale o WireGuard.
 ## Docker
 
 I file `Dockerfile` e `docker-compose.yml` restano nella radice del repository per compatibilità con `docker compose up`.
+
+
+## Avvio automatico con systemd
+
+Da un host con sistema systemd:
+
+```bash
+cd /home/giacomo/UniAi/uniai
+./scripts/install-systemd.sh
+loginctl enable-linger "$USER"
+```
+
+In alternativa copia `uniai.service.example` in `/etc/systemd/system/uniai.service`,
+adatta i percorsi e abilita il servizio:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now uniai
+```

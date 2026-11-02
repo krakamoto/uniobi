@@ -596,38 +596,59 @@ uni/Uni/triennale/Aerospace Dynamic Systems Analysis/
 
 ## Server sempre attivo
 
-Il server può essere gestito tramite un watchdog in una sessione `tmux`. Il watchdog:
+Il server usa un watchdog con lock esclusivo e health check periodico. Il watchdog:
 
 - avvia il backend se non è in esecuzione;
-- controlla `/api/health` ogni pochi secondi;
+- impedisce l’avvio di processi duplicati;
+- controlla `/api/health` ogni 3 secondi;
 - riavvia automaticamente Node se il processo termina o non risponde;
 - mantiene il server attivo anche dopo la chiusura del terminale.
 
-Avvio:
+Comandi:
 
 ```bash
 cd /home/giacomo/UniAi/uniai
-npm run service:start
-```
-
-Arresto:
-
-```bash
+npm run service:start      # avvio idempotente
+npm run service:ensure     # avvia solo se non è sano
+npm run service:status     # stato sintetico
 npm run service:stop
 ```
 
-Stato e log:
+Log:
 
 ```bash
-tmux ls
 tail -f /tmp/uniai.log
 ```
 
-Ingresso nella sessione:
+### Avvio automatico al boot
+
+Su un host Linux con systemd:
 
 ```bash
-tmux attach -t uniai
+npm run service:install-systemd
 ```
+
+Lo script installa una unit utente con `Restart=always` e abilita il servizio. Per l’avvio senza login:
+
+```bash
+loginctl enable-linger "$USER"
+```
+
+È disponibile anche un esempio per servizio di sistema:
+
+```text
+deploy/uniai.service.example
+```
+
+### Nota sulla sandbox
+
+L’ambiente attuale usa `bwrap` come PID 1 e non ha systemd attivo. In questa sandbox un processo utente non può sopravvivere alla distruzione completa dell’ambiente: dopo un riavvio della sandbox va eseguito:
+
+```bash
+npm run service:ensure
+```
+
+Su un host Linux normale, systemd o Docker con `restart: unless-stopped` eliminano questa necessità.
 
 > Questo ambiente non espone systemd/init completo, quindi il watchdog sopravvive alla chiusura del terminale ma non può essere registrato come servizio di boot tramite `systemctl`. Dopo un riavvio completo del container eseguire `npm run service:start`.
 

@@ -9,7 +9,7 @@ Indice della documentazione tecnica e operativa.
 - [Prompt di sviluppo](prompts/README.md) — prompt riutilizzabili usati per evolvere il progetto.
 - [App Android](../android/README.md) — build, permessi Android 17, rete e test.
 - [Deploy](../deploy/README.md) — reverse proxy TLS con Caddy.
-- [Script operativi](../scripts/README.md) — avvio, arresto e watchdog del server.
+- [Server e resilienza](../scripts/README.md) — watchdog, health check, systemd e riavvio automatico.
 - [Changelog](../CHANGELOG.md) — milestone principali.
 
 ## Documenti principali

@@ -1,5 +1,13 @@
 # Changelog
 
+## Server resilience — 2026-11-03
+
+- Watchdog con lock esclusivo e health check.
+- Script idempotente `ensure-uniai.sh`.
+- Stato server con `status-uniai.sh`.
+- Unit systemd con `Restart=always` e script di installazione.
+- Documentato il limite della sandbox senza init system.
+
 ## 2.4 — 2026-11-03
 
 - Le attività salvate nel vault vengono rimosse automaticamente dalla cronologia.

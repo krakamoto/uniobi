@@ -1,0 +1,15 @@
+[Unit]
+Description=UniAi self-hosted server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/giacomo/UniAi/uniai
+ExecStart=/usr/bin/env bash /home/giacomo/UniAi/uniai/scripts/run-server-forever.sh
+Restart=always
+RestartSec=3
+Environment=UNIAI_LOG_FILE=/tmp/uniai.log
+
+[Install]
+WantedBy=multi-user.target
