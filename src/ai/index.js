@@ -255,12 +255,21 @@ async function runProvider({ providerConfig, prompt, images, metadata, files, va
     case 'openai-compatible':
     case 'openrouter':
       return normalizeAiResult(await openAiAnalyze({ config: providerConfig, prompt, images }));
+    case 'deepseek':
+      return normalizeAiResult(await openAiAnalyze({
+        config: {
+          ...providerConfig,
+          aiBaseUrl: providerConfig.aiBaseUrl || 'https://api.deepseek.com'
+        },
+        prompt,
+        images
+      }));
     case 'gemini':
       return normalizeAiResult(await geminiAnalyze({ config: providerConfig, prompt, images }));
     case 'ollama':
       return normalizeAiResult(await ollamaAnalyze({ config: providerConfig, prompt, images }));
     default:
-      throw new Error(`Provider AI non supportato: ${providerConfig.aiProvider}. Usa mock, gemini, openai, openai-compatible, openrouter o ollama.`);
+      throw new Error(`Provider AI non supportato: ${providerConfig.aiProvider}. Usa mock, gemini, deepseek, openai, openai-compatible, openrouter o ollama.`);
   }
 }
 

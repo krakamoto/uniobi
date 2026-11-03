@@ -1,5 +1,12 @@
 # Changelog
 
+## Provider DeepSeek Flash — 2026-11-03
+
+- Aggiunto provider `deepseek` con API OpenAI-compatible.
+- Supporto input immagini tramite `image_url` data URL.
+- Configurabile come provider primario o fallback di Gemini.
+- Testata la costruzione della richiesta con `deepseek-flash` e `response_format: json_object`.
+
 ## Analisi AI resiliente — 2026-11-03
 
 - Retry automatico Gemini su 503, 429, timeout e risposte incomplete.

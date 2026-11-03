@@ -371,6 +371,70 @@ test('fallback automatico Gemini Flash → Gemini Pro su bassa confidenza', asyn
 });
 
 
+test('DeepSeek Flash usa l’API OpenAI-compatible con input immagine', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-deepseek-'));
+  const imagePath = path.join(root, 'appunti.png');
+  writeFileSync(imagePath, PNG_1X1);
+  const originalFetch = global.fetch;
+  let capturedUrl = '';
+  let capturedBody = null;
+  global.fetch = async (url, options) => {
+    capturedUrl = String(url);
+    capturedBody = JSON.parse(options.body);
+    const result = {
+      analyzedImageIndexes: [0],
+      course: 'Test',
+      subject: 'Test',
+      date: '2026-11-03',
+      summary: 'Analisi DeepSeek',
+      confidence: 0.9,
+      warnings: [],
+      notes: [{
+        title: 'Nota DeepSeek',
+        markdown: '# Nota DeepSeek\n\nContenuto completo.',
+        extractedText: 'Trascrizione completa',
+        tags: [], aliases: [], keyConcepts: [], conceptRelations: [], figures: [], links: [], confidence: 0.9, warnings: []
+      }]
+    };
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(result) } }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  };
+
+  try {
+    const result = await analyzeImages({
+      config: {
+        aiProvider: 'deepseek',
+        aiModel: 'deepseek-flash',
+        aiApiKey: 'deepseek-test-key',
+        aiBaseUrl: 'https://api.deepseek.com',
+        aiJsonMode: true,
+        aiFallbackEnabled: false,
+        aiFallbackMinConfidence: 0.7,
+        aiFallbackOnIllegible: true,
+        aiFallbackMinCharsPerImage: 10,
+        aiRetryMaxAttempts: 1,
+        aiRetryBaseDelayMs: 0,
+        aiRetryMaxDelayMs: 0
+      },
+      files: [{ absolutePath: imagePath, mimeType: 'image/png', originalName: 'appunti.png' }],
+      metadata: { course: 'Test', date: '2026-11-03', title: '', tags: [], userNotes: '', files: [] },
+      vaultNotes: []
+    });
+    assert.equal(capturedUrl, 'https://api.deepseek.com/chat/completions');
+    assert.equal(capturedBody.model, 'deepseek-flash');
+    assert.deepEqual(capturedBody.response_format, { type: 'json_object' });
+    const userParts = capturedBody.messages.find((message) => message.role === 'user').content;
+    assert.ok(userParts.some((part) => part.type === 'image_url' && part.image_url.url.startsWith('data:image/jpeg;base64,')));
+    assert.equal(result.title, 'Nota DeepSeek');
+    assert.deepEqual(result.analyzedImageIndexes, [0]);
+  } finally {
+    global.fetch = originalFetch;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('Gemini ritenta gli errori 503 e verifica la copertura di tutte le immagini', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'uniai-ai-retry-'));
   const imageA = path.join(root, 'a.png');

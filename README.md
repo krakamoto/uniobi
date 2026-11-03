@@ -77,6 +77,32 @@ Il provider invia le immagini a Gemini come `inlineData`, richiede output JSON e
 
 > Antigravity è un ambiente/agente di sviluppo e non il provider di inferenza runtime. Il progetto può essere sviluppato e verificato con Antigravity, ma l’analisi delle foto a runtime passa dalla Gemini API ufficiale.
 
+#### DeepSeek Flash
+
+DeepSeek Flash (`deepseek-flash`, servito da DeepSeek-V4.1-Flash) supporta input testuali e immagini ed espone un’API OpenAI-compatible. Può essere usato come provider primario o come fallback di Gemini.
+
+Configurazione come provider primario:
+
+```env
+AI_PROVIDER=deepseek
+AI_MODEL=deepseek-flash
+AI_BASE_URL=https://api.deepseek.com
+AI_API_KEY=la_tua_chiave_deepseek
+AI_JSON_MODE=true
+```
+
+Configurazione come fallback di Gemini:
+
+```env
+AI_FALLBACK_ENABLED=true
+AI_FALLBACK_PROVIDER=deepseek
+AI_FALLBACK_MODEL=deepseek-flash
+AI_FALLBACK_BASE_URL=https://api.deepseek.com
+AI_FALLBACK_API_KEY=la_tua_chiave_deepseek
+```
+
+La chiave DeepSeek non è inclusa nel repository. Senza chiave il provider non può essere testato con una chiamata reale.
+
 #### OpenAI o servizio OpenAI-compatibile
 
 ```env
