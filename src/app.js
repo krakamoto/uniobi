@@ -120,6 +120,8 @@ export function createApp({ config, store, worker }) {
       aiProvider: config.aiProvider,
       aiModel: config.aiModel,
       aiFallbackEnabled: config.aiFallbackEnabled,
+      aiFallbackProvider: config.aiFallbackProvider,
+      aiFallbackModel: config.aiFallbackModel,
       vaultConfigured: Boolean(config.vaultPath),
       vaultWritable: vaultIsWritable(config.vaultPath, config.notesSubdir),
       autoSaveToVault: config.autoSaveToVault,

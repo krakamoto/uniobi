@@ -5,7 +5,10 @@
 - Aggiunto provider `deepseek` con API OpenAI-compatible.
 - Supporto input immagini tramite `image_url` data URL.
 - Configurabile come provider primario o fallback di Gemini.
-- Testata la costruzione della richiesta con `deepseek-flash` e `response_format: json_object`.
+- Thinking mode disabilitato per l’estrazione JSON vision.
+- Limite output predefinito di 32768 token per DeepSeek Flash.
+- Testata la costruzione della richiesta e una chiamata reale con immagine.
+- Configurato DeepSeek Flash come provider primario con fallback Gemini.
 
 ## Analisi AI resiliente — 2026-11-03
 

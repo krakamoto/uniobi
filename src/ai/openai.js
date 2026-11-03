@@ -23,6 +23,14 @@ export async function openAiAnalyze({ config, prompt, images }) {
     ]
   };
   if (config.aiJsonMode) body.response_format = { type: 'json_object' };
+  if (Number(config.aiMaxOutputTokens) > 0) body.max_tokens = Number(config.aiMaxOutputTokens);
+  if (config.aiProvider === 'deepseek') {
+    // DeepSeek Flash abilita il thinking di default: per l'estrazione JSON
+    // vision serve una risposta diretta, altrimenti può consumare tutti i token
+    // nel reasoning e restituire content vuoto.
+    body.thinking = { type: 'disabled' };
+    if (!body.max_tokens) body.max_tokens = 32768;
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 180000);

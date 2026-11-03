@@ -101,6 +101,8 @@ AI_FALLBACK_BASE_URL=https://api.deepseek.com
 AI_FALLBACK_API_KEY=la_tua_chiave_deepseek
 ```
 
+Il provider DeepSeek disabilita automaticamente il thinking mode per l’estrazione JSON vision e imposta un limite output di 32768 token, evitando risposte vuote causate dal consumo di tutti i token nel reasoning.
+
 La chiave DeepSeek non è inclusa nel repository. Senza chiave il provider non può essere testato con una chiamata reale.
 
 #### OpenAI o servizio OpenAI-compatibile

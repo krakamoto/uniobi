@@ -425,6 +425,8 @@ test('DeepSeek Flash usa l’API OpenAI-compatible con input immagine', async ()
     assert.equal(capturedUrl, 'https://api.deepseek.com/chat/completions');
     assert.equal(capturedBody.model, 'deepseek-flash');
     assert.deepEqual(capturedBody.response_format, { type: 'json_object' });
+    assert.deepEqual(capturedBody.thinking, { type: 'disabled' });
+    assert.equal(capturedBody.max_tokens, 32768);
     const userParts = capturedBody.messages.find((message) => message.role === 'user').content;
     assert.ok(userParts.some((part) => part.type === 'image_url' && part.image_url.url.startsWith('data:image/jpeg;base64,')));
     assert.equal(result.title, 'Nota DeepSeek');

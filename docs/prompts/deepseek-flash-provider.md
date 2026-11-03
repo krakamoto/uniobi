@@ -22,7 +22,8 @@ Il provider `deepseek` deve:
 1. usare `https://api.deepseek.com` come base URL predefinito;
 2. inviare le immagini come content part `image_url` con data URL base64;
 3. usare `response_format: { "type": "json_object" }`;
-4. passare dal medesimo sistema di retry e copertura immagini di Gemini;
+4. disabilitare il thinking mode e impostare un output massimo adeguato per evitare content vuoto;
+5. passare dal medesimo sistema di retry e copertura immagini di Gemini;
 5. poter essere configurato come provider primario o fallback.
 
 ## Configurazione
