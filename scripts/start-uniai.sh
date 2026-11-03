@@ -5,6 +5,8 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SESSION_NAME="${UNIAI_TMUX_SESSION:-uniai}"
 HEALTH_URL="${UNIAI_HEALTH_URL:-http://127.0.0.1:3000/api/health}"
 LOG_FILE="${UNIAI_LOG_FILE:-/tmp/uniai.log}"
+# shellcheck source=systemd-helpers.sh
+source "$PROJECT_DIR/scripts/systemd-helpers.sh"
 
 is_healthy() {
   curl -fsS --max-time 5 "$HEALTH_URL" >/dev/null 2>&1
@@ -13,6 +15,20 @@ is_healthy() {
 if is_healthy; then
   echo "UniAi è già attivo e risponde su $HEALTH_URL."
   exit 0
+fi
+
+if uniai_systemd_loaded; then
+  echo "Riavvio della unit systemd utente '$UNIAI_SYSTEMD_UNIT'."
+  uniai_systemd_start
+  for _ in $(seq 1 30); do
+    sleep 0.5
+    if is_healthy; then
+      echo "UniAi avviato tramite systemd."
+      exit 0
+    fi
+  done
+  echo "La unit è stata avviata ma il server non risponde. Controlla $LOG_FILE."
+  exit 1
 fi
 
 if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then

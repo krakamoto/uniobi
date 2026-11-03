@@ -6,6 +6,7 @@
 - `status-uniai.sh` — mostra stato tmux, health e risposta JSON.
 - `stop-uniai.sh` — arresta la sessione e il processo Node.
 - `install-systemd.sh` — installa la unit utente systemd con `Restart=always`.
+- `systemd-helpers.sh` — helper D-Bus con fallback `busctl --user` per sandbox.
 
 ## Comandi
 
@@ -25,4 +26,4 @@
 * * * * * /home/giacomo/UniAi/uniai/scripts/ensure-uniai.sh >/dev/null 2>&1
 ```
 
-Il watchog interno riavvia Node per crash e health check falliti. Un riavvio completo della sandbox richiede un init system esterno o Docker con `restart: unless-stopped`.
+Il watchdog interno riavvia Node per crash e health check falliti. La unit utente `uniai.service` è installata e abilitata con linger sul host, quindi sopravvive alla chiusura della sessione della chat.

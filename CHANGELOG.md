@@ -2,6 +2,9 @@
 
 ## Server resilience — 2026-11-03
 
+- Unit systemd utente `uniai.service` installata sul host e abilitata con linger.
+- Avvio automatico fuori dalla sandbox della chat.
+
 - Watchdog con lock esclusivo e health check.
 - Script idempotente `ensure-uniai.sh`.
 - Stato server con `status-uniai.sh`.

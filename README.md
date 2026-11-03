@@ -640,15 +640,37 @@ loginctl enable-linger "$USER"
 deploy/uniai.service.example
 ```
 
-### Nota sulla sandbox
+### Servizio persistente
 
-L’ambiente attuale usa `bwrap` come PID 1 e non ha systemd attivo. In questa sandbox un processo utente non può sopravvivere alla distruzione completa dell’ambiente: dopo un riavvio della sandbox va eseguito:
+Su questa macchina è installata una unit systemd utente:
 
-```bash
-npm run service:ensure
+```text
+uniai.service
 ```
 
-Su un host Linux normale, systemd o Docker con `restart: unless-stopped` eliminano questa necessità.
+La unit viene eseguita dal manager utente del host, fuori dalla sandbox della chat, con:
+
+- `Restart=always`;
+- avvio automatico tramite `default.target`;
+- linger attivo per l’utente;
+- watchdog interno con health check.
+
+Verifica:
+
+```bash
+npm run service:status
+```
+
+Risultato atteso:
+
+```text
+Systemd utente: attivo (uniai.service)
+Health: OK
+```
+
+La chiusura della chat non termina il servizio. Dopo un riavvio completo del host, systemd lo avvia automaticamente grazie a `loginctl enable-linger`.
+
+Se `systemctl --user` non è raggiungibile dalla sandbox, gli script usano automaticamente `busctl --user` per comunicare con il manager utente del host.
 
 > Questo ambiente non espone systemd/init completo, quindi il watchdog sopravvive alla chiusura del terminale ma non può essere registrato come servizio di boot tramite `systemctl`. Dopo un riavvio completo del container eseguire `npm run service:start`.
 

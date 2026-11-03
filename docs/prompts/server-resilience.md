@@ -35,4 +35,5 @@ Garantire che il backend UniAi torni operativo automaticamente dopo:
 - Se il server è spento, `ensure-uniai.sh` lo riavvia.
 - `start-uniai.sh` non crea duplicati.
 - Su un host con systemd, la unit parte al boot e si riavvia da sola.
+- La unit utente è installata come symlink in `~/.config/systemd/user/` e il processo gira nel cgroup `user@1000.service/app.slice/uniai.service`.
 - `npm test` e `npm run check` restano verdi.
