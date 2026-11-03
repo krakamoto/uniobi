@@ -178,7 +178,10 @@ export function createWorker({ config, store }) {
           modelUsed: aiResult.modelUsed || config.aiModel,
           fallbackUsed: Boolean(aiResult.fallbackUsed),
           fallbackAttempted: Boolean(aiResult.fallbackAttempted),
-          fallbackReason: aiResult.fallbackReason || ''
+          fallbackReason: aiResult.fallbackReason || '',
+          retryAttempts: Number(aiResult.retryAttempts) || 1,
+          perImageFallbackUsed: Boolean(aiResult.perImageFallbackUsed),
+          analyzedImageIndexes: aiResult.analyzedImageIndexes || []
         }
       };
 

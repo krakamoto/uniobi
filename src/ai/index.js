@@ -53,6 +53,103 @@ export function parseAiJson(text) {
   throw new Error('Il provider AI non ha restituito un JSON valido.');
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function isRetryableAiError(error) {
+  const message = String(error?.message || error || '').toLocaleLowerCase('it');
+  if (/http (400|401|403|404)\b/.test(message)) return false;
+  if (/bloccat|blockreason|safety/.test(message)) return false;
+  return /http (429|500|502|503|504)\b|timeout|timeout di gemini|errore di rete|fetch failed|econn|socket|empty|vuota|non ha restituito|json valido|unavailable|overloaded|rate limit|high demand/.test(message);
+}
+
+function normalizeAnalyzedIndexes(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(Number).filter((index) => Number.isInteger(index) && index >= 0))];
+}
+
+export function missingImageIndexes(result, expectedIndexes = []) {
+  const expected = [...new Set(expectedIndexes.map(Number).filter((index) => Number.isInteger(index) && index >= 0))];
+  const reported = normalizeAnalyzedIndexes(result?.analyzedImageIndexes || result?.analyzed_image_indexes);
+  return expected.filter((index) => !reported.includes(index));
+}
+
+function mergeNotesByTitle(notes) {
+  const merged = [];
+  const byTitle = new Map();
+  for (const note of notes) {
+    const key = String(note.title || '').trim().toLocaleLowerCase('it') || `nota-${merged.length + 1}`;
+    const existing = byTitle.get(key);
+    if (!existing) {
+      const copy = { ...note };
+      byTitle.set(key, copy);
+      merged.push(copy);
+      continue;
+    }
+    existing.markdown = [existing.markdown, note.markdown].filter(Boolean).join('\n\n');
+    existing.extractedText = [existing.extractedText, note.extractedText].filter(Boolean).join('\n\n');
+    existing.summary = existing.summary || note.summary || '';
+    existing.tags = uniqueStrings([...(existing.tags || []), ...(note.tags || [])]);
+    existing.aliases = uniqueStrings([...(existing.aliases || []), ...(note.aliases || [])]);
+    existing.keyConcepts = uniqueStrings([...(existing.keyConcepts || []), ...(note.keyConcepts || [])]);
+    existing.conceptRelations = [...(existing.conceptRelations || []), ...(note.conceptRelations || [])];
+    existing.figures = [...(existing.figures || []), ...(note.figures || [])];
+    existing.links = [...(existing.links || []), ...(note.links || [])];
+    existing.warnings = uniqueStrings([...(existing.warnings || []), ...(note.warnings || [])]);
+    const values = [existing.confidence, note.confidence].map(Number).filter(Number.isFinite);
+    existing.confidence = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : existing.confidence;
+  }
+  return merged;
+}
+
+function remapResultImageIndexes(result, originalIndex) {
+  const notes = (result.notes || []).map((note) => ({
+    ...note,
+    figures: (note.figures || []).map((figure) => ({ ...figure, sourceImageIndex: originalIndex }))
+  }));
+  return {
+    ...result,
+    notes,
+    noteCount: notes.length,
+    figures: notes.flatMap((note) => note.figures || []),
+    analyzedImageIndexes: [originalIndex]
+  };
+}
+
+function mergePartialResults(results, expectedIndexes, batchError) {
+  const notes = mergeNotesByTitle(results.flatMap((result) => result.notes || []));
+  const first = results[0] || {};
+  const confidenceValues = notes.map((note) => Number(note.confidence)).filter(Number.isFinite);
+  return {
+    notes,
+    noteCount: notes.length,
+    analyzedImageIndexes: [...expectedIndexes],
+    title: notes[0]?.title || first.title || '',
+    course: first.course || '',
+    subject: first.subject || '',
+    subjectPath: first.subjectPath || '',
+    date: first.date || '',
+    tags: uniqueStrings(notes.flatMap((note) => note.tags || [])),
+    aliases: uniqueStrings(notes.flatMap((note) => note.aliases || [])),
+    summary: results.map((result) => result.summary).filter(Boolean).join(' '),
+    extractedText: notes.map((note) => note.extractedText).filter(Boolean).join('\n\n'),
+    keyConcepts: uniqueStrings(notes.flatMap((note) => note.keyConcepts || [])),
+    conceptRelations: notes.flatMap((note) => note.conceptRelations || []),
+    figures: notes.flatMap((note) => note.figures || []),
+    markdown: notes[0]?.markdown || '',
+    links: notes.flatMap((note) => note.links || []),
+    confidence: confidenceValues.length ? confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length : 0.5,
+    warnings: uniqueStrings([
+      ...results.flatMap((result) => result.warnings || []),
+      ...(batchError ? [`Analisi batch non riuscita; completata per singola immagine: ${batchError.message}`] : [])
+    ]),
+    analyzedImageIndexes: [...expectedIndexes],
+    perImageFallbackUsed: true,
+    retryAttempts: Math.max(...results.map((result) => Number(result.retryAttempts) || 1))
+  };
+}
+
 function normalizeSingleNote(result, fallback = {}) {
   const raw = result && typeof result === 'object' ? result : {};
   const title = String(raw.title || fallback.title || 'Appunti senza titolo').trim();
@@ -130,6 +227,7 @@ export function normalizeAiResult(raw, fallback = {}) {
   return {
     notes,
     noteCount: notes.length,
+    analyzedImageIndexes: normalizeAnalyzedIndexes(result.analyzedImageIndexes || result.analyzed_image_indexes),
     title: notes[0].title,
     course: String(result.course || notes[0].course || fallback.course || '').trim(),
     subject: String(result.subject || notes[0].subject || fallback.subject || '').trim(),
@@ -182,6 +280,8 @@ export function shouldUseAdvancedFallback(result, files, config) {
     ...(result?.warnings || []),
     ...notes.flatMap((note) => note.warnings || [])
   ].join(' ').toLocaleLowerCase('it');
+  const missingIndexes = missingImageIndexes(result, files.map((_, index) => index));
+  if (missingIndexes.length) reasons.push(`immagini non analizzate: ${missingIndexes.map((index) => index + 1).join(', ')}`);
 
   if (markdownLength < 120) reasons.push('Markdown troppo corto o incompleto');
   if (confidence < config.aiFallbackMinConfidence) {
@@ -196,6 +296,65 @@ export function shouldUseAdvancedFallback(result, files, config) {
   }
 
   return { needed: reasons.length > 0, reason: reasons.join('; ') };
+}
+
+async function runProviderWithRetries({ providerConfig, prompt, images, metadata, files, vaultNotes, expectedIndexes }) {
+  const maxAttempts = Math.max(1, Number(providerConfig.aiRetryMaxAttempts) || 1);
+  const baseDelay = Math.max(0, Number(providerConfig.aiRetryBaseDelayMs) || 0);
+  const maxDelay = Math.max(0, Number(providerConfig.aiRetryMaxDelayMs) || 0);
+  const needsCoverage = providerConfig.aiProvider === 'gemini' && expectedIndexes.length > 0;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const result = await runProvider({ providerConfig, prompt, images, metadata, files, vaultNotes });
+      if (!result.notes?.length) throw new Error('Il provider AI non ha prodotto note complete.');
+      const missing = needsCoverage ? missingImageIndexes(result, expectedIndexes) : [];
+      if (missing.length === 0) {
+        result.analyzedImageIndexes = expectedIndexes;
+        result.retryAttempts = attempt;
+        return result;
+      }
+      lastError = new Error(`Il provider non ha analizzato tutte le immagini (mancanti: ${missing.map((index) => index + 1).join(', ')}).`);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableAiError(error)) throw error;
+    }
+
+    if (attempt < maxAttempts) {
+      const exponential = Math.min(maxDelay, baseDelay * (2 ** (attempt - 1)));
+      const jitter = exponential > 0 ? Math.floor(Math.random() * Math.min(1000, exponential / 2)) : 0;
+      await sleep(exponential + jitter);
+    }
+  }
+  throw lastError || new Error('Analisi AI non riuscita.');
+}
+
+async function runProviderResilient(options) {
+  const expectedIndexes = options.images.map((_, index) => index);
+  try {
+    return await runProviderWithRetries({ ...options, expectedIndexes });
+  } catch (batchError) {
+    if (options.images.length <= 1) throw batchError;
+    const partials = [];
+    for (let index = 0; index < options.images.length; index += 1) {
+      const singlePrompt = `${options.prompt}
+
+ATTENZIONE: questa richiesta contiene UNA SOLA immagine (indice originale ${index}). Analizza questa immagine e restituisci analyzedImageIndexes: [${index}]. Per le figure usa sourceImageIndex: ${index}.`;
+      try {
+        const single = await runProviderWithRetries({
+          ...options,
+          prompt: singlePrompt,
+          images: [options.images[index]],
+          expectedIndexes: [0]
+        });
+        partials.push(remapResultImageIndexes(single, index));
+      } catch (singleError) {
+        throw new Error(`Impossibile analizzare la foto ${index + 1}/${options.images.length}: ${singleError.message}`);
+      }
+    }
+    return mergePartialResults(partials, expectedIndexes, batchError);
+  }
 }
 
 export async function analyzeImages({ config, files, metadata, vaultNotes, vaultAnalysis, matchedSubject }) {
@@ -235,7 +394,8 @@ Regole precise basate sul vault reale:
 8b. Per schemi, grafici, tabelle, circuiti o disegni presenti nelle immagini, NON ridisegnarli e NON inventare immagini o URL. Restituisci un array figures con ritaglio dell'immagine originale: id, sourceImageIndex (indice 0-based dell'immagine caricata), bbox normalizzato [x,y,width,height] da 0 a 1, caption e kind. Inserisci nel markdown il placeholder {{id}} nel punto in cui deve comparire la figura. Se non ci sono figure da ritagliare, usa figures: [].
 9. Estrai 3-10 concetti chiave atomici e alcune relazioni concettuali per ogni nota. Usa termini coerenti con la terminologia delle note esistenti.
 10. Non includere frontmatter YAML: il backend lo genera. Il campo markdown deve contenere solo il corpo della nota.
-11. Restituisci ESCLUSIVAMENTE un oggetto JSON valido, senza testo fuori dal JSON, con questa forma:
+11. Ogni immagine allegata deve essere analizzata: non omettere nessuna foto. Inserisci nel campo analyzedImageIndexes TUTTI gli indici 0-based delle immagini che hai effettivamente letto. Se una foto è illeggibile, includila comunque e segnalalo nei warnings.
+12. Restituisci ESCLUSIVAMENTE un oggetto JSON valido, senza testo fuori dal JSON, con questa forma:
 {
   "course": "Nome corso indicato o dedotto",
   "subject": "Materia esistente o proposta",
@@ -244,6 +404,7 @@ Regole precise basate sul vault reale:
   "summary": "Riassunto complessivo del gruppo di immagini",
   "confidence": 0.0,
   "warnings": ["Eventuali dubbi complessivi"],
+  "analyzedImageIndexes": [0, 1],
   "notes": [
     {
       "title": "Titolo sintetico del primo argomento",
@@ -265,7 +426,7 @@ Regole precise basate sul vault reale:
   let primary = null;
   let primaryError = null;
   try {
-    primary = await runProvider({ providerConfig: config, prompt, images, metadata, files, vaultNotes });
+    primary = await runProviderResilient({ providerConfig: config, prompt, images, metadata, files, vaultNotes });
     primary.modelUsed = config.aiModel;
     primary.fallbackUsed = false;
     primary.fallbackAttempted = false;
@@ -287,7 +448,7 @@ Regole precise basate sul vault reale:
 
   if (fallbackDecision.needed) {
     try {
-      const advanced = await runProvider({
+      const advanced = await runProviderResilient({
         providerConfig: fallbackConfig,
         prompt,
         images,

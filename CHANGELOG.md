@@ -1,5 +1,13 @@
 # Changelog
 
+## Analisi AI resiliente — 2026-11-03
+
+- Retry automatico Gemini su 503, 429, timeout e risposte incomplete.
+- Backoff esponenziale con jitter.
+- Campo `analyzedImageIndexes` per verificare la copertura di tutte le foto.
+- Fallback per singola immagine quando il batch è incompleto.
+- Nessun salvataggio di note parziali.
+
 ## Server resilience — 2026-11-03
 
 - Unit systemd utente `uniai.service` installata sul host e abilitata con linger.

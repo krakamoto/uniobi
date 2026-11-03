@@ -312,7 +312,8 @@ test('fallback automatico Gemini Flash → Gemini Pro su bassa confidenza', asyn
           keyConcepts: ['concetto'],
           conceptRelations: [],
           confidence: 0.95,
-          warnings: []
+          warnings: [],
+          analyzedImageIndexes: [0]
         }
       : {
           title: 'Risultato Flash',
@@ -324,7 +325,8 @@ test('fallback automatico Gemini Flash → Gemini Pro su bassa confidenza', asyn
           markdown: '# Risultato Flash\n\nTesto incerto.',
           links: [],
           confidence: 0.2,
-          warnings: ['Parte illeggibile nella foto']
+          warnings: ['Parte illeggibile nella foto'],
+          analyzedImageIndexes: [0]
         };
     return new Response(JSON.stringify({
       candidates: [{ content: { parts: [{ text: JSON.stringify(result) }] } }]
@@ -346,7 +348,10 @@ test('fallback automatico Gemini Flash → Gemini Pro su bassa confidenza', asyn
         aiFallbackBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
         aiFallbackMinConfidence: 0.7,
         aiFallbackOnIllegible: true,
-        aiFallbackMinCharsPerImage: 10
+        aiFallbackMinCharsPerImage: 10,
+        aiRetryMaxAttempts: 1,
+        aiRetryBaseDelayMs: 0,
+        aiRetryMaxDelayMs: 0
       },
       files: [{ absolutePath: imagePath, mimeType: 'image/png', originalName: 'appunti.png' }],
       metadata: { course: 'Test', date: '2025-10-31', title: '', tags: [], userNotes: '', files: [] },
@@ -366,6 +371,140 @@ test('fallback automatico Gemini Flash → Gemini Pro su bassa confidenza', asyn
 });
 
 
+test('Gemini ritenta gli errori 503 e verifica la copertura di tutte le immagini', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-ai-retry-'));
+  const imageA = path.join(root, 'a.png');
+  const imageB = path.join(root, 'b.png');
+  writeFileSync(imageA, PNG_1X1);
+  writeFileSync(imageB, PNG_1X1);
+  const originalFetch = global.fetch;
+  let calls = 0;
+  global.fetch = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return new Response('high demand', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+    }
+    const incomplete = calls === 2;
+    const result = {
+      analyzedImageIndexes: incomplete ? [0] : [0, 1],
+      course: 'Test',
+      subject: 'Test',
+      date: '2025-10-31',
+      summary: 'Analisi',
+      confidence: 0.9,
+      warnings: [],
+      notes: incomplete
+        ? [{ title: 'Nota A', markdown: '# Nota A\n\nTesto sufficientemente lungo per il test.', extractedText: 'Testo A', tags: [], aliases: [], keyConcepts: [], conceptRelations: [], figures: [], links: [], confidence: 0.9, warnings: [] }]
+        : [
+            { title: 'Nota A', markdown: '# Nota A\n\nTesto sufficientemente lungo per il test.', extractedText: 'Testo A', tags: [], aliases: [], keyConcepts: [], conceptRelations: [], figures: [], links: [], confidence: 0.9, warnings: [] },
+            { title: 'Nota B', markdown: '# Nota B\n\nTesto sufficientemente lungo per il test.', extractedText: 'Testo B', tags: [], aliases: [], keyConcepts: [], conceptRelations: [], figures: [], links: [], confidence: 0.9, warnings: [] }
+          ]
+    };
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(result) }] } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    const result = await analyzeImages({
+      config: {
+        aiProvider: 'gemini',
+        aiModel: 'gemini-test',
+        aiApiKey: 'test-key',
+        aiBaseUrl: 'https://example.test',
+        aiFallbackEnabled: false,
+        aiFallbackMinConfidence: 0.7,
+        aiFallbackOnIllegible: true,
+        aiFallbackMinCharsPerImage: 10,
+        aiRetryMaxAttempts: 4,
+        aiRetryBaseDelayMs: 0,
+        aiRetryMaxDelayMs: 0
+      },
+      files: [
+        { absolutePath: imageA, mimeType: 'image/png', originalName: 'a.png' },
+        { absolutePath: imageB, mimeType: 'image/png', originalName: 'b.png' }
+      ],
+      metadata: { course: 'Test', date: '2025-10-31', title: '', tags: [], userNotes: '', files: [] },
+      vaultNotes: []
+    });
+    assert.equal(calls, 3);
+    assert.equal(result.retryAttempts, 3);
+    assert.deepEqual(result.analyzedImageIndexes, [0, 1]);
+    assert.equal(result.notes.length, 2);
+  } finally {
+    global.fetch = originalFetch;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('se il batch Gemini fallisce analizza ogni foto separatamente', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-ai-per-image-'));
+  const imageA = path.join(root, 'a.png');
+  const imageB = path.join(root, 'b.png');
+  writeFileSync(imageA, PNG_1X1);
+  writeFileSync(imageB, PNG_1X1);
+  const originalFetch = global.fetch;
+  let batchCalls = 0;
+  let singleCalls = 0;
+  global.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    const parts = body.contents[0].parts.filter((part) => part.inlineData);
+    if (parts.length > 1) {
+      batchCalls += 1;
+      return new Response('high demand', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+    }
+    singleCalls += 1;
+    const promptText = body.contents[0].parts[0].text;
+    const originalIndex = promptText.includes('indice originale 1') ? 1 : 0;
+    const result = {
+      analyzedImageIndexes: [0],
+      course: 'Test',
+      subject: 'Test',
+      date: '2025-10-31',
+      summary: `Analisi foto ${originalIndex + 1}`,
+      confidence: 0.9,
+      warnings: [],
+      notes: [{
+        title: `Nota foto ${originalIndex + 1}`,
+        markdown: `# Nota foto ${originalIndex + 1}\n\nContenuto completo della foto.`,
+        extractedText: `Testo foto ${originalIndex + 1}`,
+        tags: [], aliases: [], keyConcepts: [], conceptRelations: [], figures: [], links: [], confidence: 0.9, warnings: []
+      }]
+    };
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(result) }] } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    const result = await analyzeImages({
+      config: {
+        aiProvider: 'gemini',
+        aiModel: 'gemini-test',
+        aiApiKey: 'test-key',
+        aiBaseUrl: 'https://example.test',
+        aiFallbackEnabled: false,
+        aiFallbackMinConfidence: 0.7,
+        aiFallbackOnIllegible: true,
+        aiFallbackMinCharsPerImage: 10,
+        aiRetryMaxAttempts: 2,
+        aiRetryBaseDelayMs: 0,
+        aiRetryMaxDelayMs: 0
+      },
+      files: [
+        { absolutePath: imageA, mimeType: 'image/png', originalName: 'a.png' },
+        { absolutePath: imageB, mimeType: 'image/png', originalName: 'b.png' }
+      ],
+      metadata: { course: 'Test', date: '2025-10-31', title: '', tags: [], userNotes: '', files: [] },
+      vaultNotes: []
+    });
+    assert.equal(batchCalls, 2);
+    assert.equal(singleCalls, 2);
+    assert.equal(result.perImageFallbackUsed, true);
+    assert.deepEqual(result.analyzedImageIndexes, [0, 1]);
+    assert.equal(result.notes.length, 2);
+  } finally {
+    global.fetch = originalFetch;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('il modello può restituire più note separate per argomenti distinti', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'uniai-multinote-ai-'));
   const imagePath = path.join(root, 'appunti.png');
@@ -376,6 +515,7 @@ test('il modello può restituire più note separate per argomenti distinti', asy
       content: {
         parts: [{
           text: JSON.stringify({
+            analyzedImageIndexes: [0],
             course: 'Controlli automatici',
             subject: 'controlli automatici',
             date: '2025-10-31',
@@ -428,7 +568,10 @@ test('il modello può restituire più note separate per argomenti distinti', asy
         aiFallbackModel: '',
         aiFallbackMinConfidence: 0.7,
         aiFallbackOnIllegible: true,
-        aiFallbackMinCharsPerImage: 10
+        aiFallbackMinCharsPerImage: 10,
+        aiRetryMaxAttempts: 1,
+        aiRetryBaseDelayMs: 0,
+        aiRetryMaxDelayMs: 0
       },
       files: [{ absolutePath: imagePath, mimeType: 'image/png', originalName: 'appunti.png' }],
       metadata: { course: 'Controlli automatici', date: '2025-10-31', title: '', tags: [], userNotes: '', files: [] },

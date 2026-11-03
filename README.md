@@ -191,6 +191,24 @@ Tutte le variabili sono documentate in `.env.example`:
 | `PROPFIND/GET/PUT/...` | `/webdav/*` | Sincronizzazione WebDAV del vault Obsidian |
 | `POST` | `/api/vault/rebuild-artifacts` | Rigenera indici e mappe di tutte le materie |
 
+## Affidabilità analisi multi-immagine
+
+Le richieste Gemini vengono ritentate automaticamente su errori transitori:
+
+- HTTP 429, 500, 502, 503, 504;
+- timeout e errori di rete;
+- risposte vuote o JSON non valido.
+
+Ogni risposta deve contenere `analyzedImageIndexes` con tutti gli indici delle foto lette. Se Gemini restituisce un risultato incompleto o il batch fallisce, il backend analizza una foto alla volta e unisce i risultati. Se una foto non può essere analizzata dopo tutti i tentativi, il job fallisce senza salvare note parziali.
+
+Configurazione:
+
+```env
+AI_RETRY_MAX_ATTEMPTS=8
+AI_RETRY_BASE_DELAY_MS=2000
+AI_RETRY_MAX_DELAY_MS=30000
+```
+
 ## Fallback automatico Gemini Flash → Gemini Pro
 
 Il backend supporta un secondo modello avanzato. Se l’analisi primaria è debole, UniAi ripete automaticamente l’elaborazione con il modello di fallback.

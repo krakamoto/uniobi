@@ -7,6 +7,7 @@ Prompt riutilizzabili per evolvere il progetto in modo coerente.
 - [Corsi e numerazione](android-courses-numbering.md) — gestione corsi e nomi numerati.
 - [Divisione multi-nota](multinote-split.md) — suddivisione di una lezione in più note.
 - [Resilienza server](server-resilience.md) — watchdog, health check, systemd e riavvio automatico.
+- [Retry Gemini e copertura immagini](gemini-retry-coverage.md) — retry su 503, analisi per singola foto e niente note parziali.
 
 ## Regole per nuovi prompt
 
