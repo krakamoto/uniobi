@@ -10,6 +10,7 @@ Prompt riutilizzabili per evolvere il progetto in modo coerente.
 - [Retry Gemini e copertura immagini](gemini-retry-coverage.md) — retry su 503, analisi per singola foto e niente note parziali.
 - [DeepSeek Flash](deepseek-flash-provider.md) — provider vision OpenAI-compatible come alternativa o fallback.
 - [Claude Batch Haiku → Sonnet](claude-batch-haiku-sonnet.md) — Haiku 5.5 primario, Sonnet 5.5 per precisione e Batch API al 50%.
+- [Ottimizzazione immagini e token](image-token-optimization.md) — crop sicuro, resize prudente e tracking dei token.
 
 ## Regole per nuovi prompt
 

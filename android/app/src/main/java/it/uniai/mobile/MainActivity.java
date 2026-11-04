@@ -1695,6 +1695,26 @@ public class MainActivity extends Activity {
         String lessonDate = jsonString(job, "lesson_date");
         content.addView(text("Data: " + (lessonDate.isEmpty() ? "non indicata" : lessonDate), 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
 
+        JSONObject aiInfo = resultJson == null ? null : resultJson.optJSONObject("ai");
+        if (aiInfo != null) {
+            JSONObject usage = aiInfo.optJSONObject("usage");
+            if (usage != null) {
+                String usageLine = "Token AI: input " + usage.optInt("inputTokens", 0)
+                    + " · output " + usage.optInt("outputTokens", 0);
+                if (usage.optInt("cachedInputTokens", 0) > 0) usageLine += " · cache " + usage.optInt("cachedInputTokens", 0);
+                content.addView(text(usageLine, 11, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+            }
+            JSONArray imageProcessing = aiInfo.optJSONArray("imageProcessing");
+            if (imageProcessing != null && imageProcessing.length() > 0) {
+                int cropped = 0;
+                for (int i = 0; i < imageProcessing.length(); i++) {
+                    JSONObject image = imageProcessing.optJSONObject(i);
+                    if (image != null && image.optBoolean("cropApplied", false)) cropped += 1;
+                }
+                content.addView(text("Immagini: " + imageProcessing.length() + " · ritagliate: " + cropped, 11, MUTED, Typeface.NORMAL), matchTop(dp(2)));
+            }
+        }
+
         String error = jsonString(job, "error");
         if (!error.isEmpty()) {
             TextView errorView = text(error, 13, DANGER, Typeface.NORMAL);

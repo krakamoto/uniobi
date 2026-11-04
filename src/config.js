@@ -39,6 +39,14 @@ export function loadConfig(env = process.env, root = process.cwd()) {
   if (aiFallbackEnabled && !aiFallbackModel) {
     throw new Error('AI_FALLBACK_MODEL è obbligatorio quando AI_FALLBACK_ENABLED=true.');
   }
+  const imageMaxSide = Math.max(512, number(env.IMAGE_MAX_SIDE, 1600));
+  const imageJpegQuality = Math.max(40, Math.min(100, number(env.IMAGE_JPEG_QUALITY, 88)));
+  const imageCropEnabled = bool(env.IMAGE_CROP_ENABLED, true);
+  const imageCropAnalysisSide = Math.max(256, Math.min(1200, number(env.IMAGE_CROP_ANALYSIS_SIDE, 640)));
+  const imageCropThreshold = Math.max(8, Math.min(80, number(env.IMAGE_CROP_THRESHOLD, 24)));
+  const imageCropPaddingRatio = Math.max(0, Math.min(0.1, number(env.IMAGE_CROP_PADDING_RATIO, 0.02)));
+  const imageCropMaxInkLossRatio = Math.max(0, Math.min(0.1, number(env.IMAGE_CROP_MAX_INK_LOSS_RATIO, 0.02)));
+  const imageCropMinContentRatio = Math.max(0.01, Math.min(0.8, number(env.IMAGE_CROP_MIN_CONTENT_RATIO, 0.08)));
   const aiMaxOutputTokens = Math.max(0, number(env.AI_MAX_OUTPUT_TOKENS, 0));
   const aiRetryMaxAttempts = Math.max(1, number(env.AI_RETRY_MAX_ATTEMPTS, 8));
   const aiRetryBaseDelayMs = Math.max(0, number(env.AI_RETRY_BASE_DELAY_MS, 2000));
@@ -75,6 +83,14 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     obsidianSubjectAttachmentsSubdir: String(env.OBSIDIAN_SUBJECT_ATTACHMENTS_SUBDIR || 'Allegati').replace(/^\/+|\/+$/g, ''),
     maxUploadMb: number(env.MAX_UPLOAD_MB, 20),
     maxFilesPerUpload: number(env.MAX_FILES_PER_UPLOAD, 10),
+    imageMaxSide,
+    imageJpegQuality,
+    imageCropEnabled,
+    imageCropAnalysisSide,
+    imageCropThreshold,
+    imageCropPaddingRatio,
+    imageCropMaxInkLossRatio,
+    imageCropMinContentRatio,
     aiProvider: (env.AI_PROVIDER || 'mock').toLowerCase(),
     aiModel: env.AI_MODEL || 'gemini-3.8-flash',
     aiApiKey: env.AI_API_KEY || '',

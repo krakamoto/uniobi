@@ -58,8 +58,15 @@ export async function openAiAnalyze({ config, prompt, images }) {
   }
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content;
-  if (Array.isArray(content)) {
-    return parseAiJson(content.map((part) => part?.text || '').join('\n'));
-  }
-  return parseAiJson(content);
+  const parsed = Array.isArray(content)
+    ? parseAiJson(content.map((part) => part?.text || '').join('\n'))
+    : parseAiJson(content);
+  parsed._providerUsage = {
+    inputTokens: Number(data.usage?.prompt_tokens) || 0,
+    outputTokens: Number(data.usage?.completion_tokens) || 0,
+    totalTokens: Number(data.usage?.total_tokens) || (Number(data.usage?.prompt_tokens) || 0) + (Number(data.usage?.completion_tokens) || 0),
+    cachedInputTokens: Number(data.usage?.prompt_tokens_details?.cached_tokens) || Number(data.usage?.prompt_cache_hit_tokens) || 0,
+    batchRequests: 0
+  };
+  return parsed;
 }

@@ -64,7 +64,15 @@ async function directAnalyze({ config, prompt, images }) {
   const data = await parseResponse(response, 'messages');
   const text = textFromMessage(data);
   if (!text) throw new Error('Claude non ha restituito contenuto.');
-  return parseAiJson(text);
+  const parsed = parseAiJson(text);
+  parsed._providerUsage = {
+    inputTokens: Number(data.usage?.input_tokens) || 0,
+    outputTokens: Number(data.usage?.output_tokens) || 0,
+    totalTokens: (Number(data.usage?.input_tokens) || 0) + (Number(data.usage?.output_tokens) || 0),
+    cachedInputTokens: (Number(data.usage?.cache_read_input_tokens) || 0) + (Number(data.usage?.cache_creation_input_tokens) || 0),
+    batchRequests: 0
+  };
+  return parsed;
 }
 
 async function batchAnalyze({ config, prompt, images }) {
@@ -118,7 +126,17 @@ async function batchAnalyze({ config, prompt, images }) {
     }
     const text = textFromMessage(item.result.message);
     if (!text) throw new Error('Claude Batch ha restituito un messaggio vuoto.');
-    return parseAiJson(text);
+    const parsed = parseAiJson(text);
+    const usage = item.result.message?.usage || {};
+    parsed._providerUsage = {
+      inputTokens: Number(usage.input_tokens) || 0,
+      outputTokens: Number(usage.output_tokens) || 0,
+      totalTokens: (Number(usage.input_tokens) || 0) + (Number(usage.output_tokens) || 0),
+      cachedInputTokens: (Number(usage.cache_read_input_tokens) || 0) + (Number(usage.cache_creation_input_tokens) || 0),
+      batchRequests: 1,
+      batchApi: true
+    };
+    return parsed;
   }
   throw new Error(`Risultato Claude Batch non trovato per ${customId}.`);
 }

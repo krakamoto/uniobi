@@ -182,6 +182,8 @@ export function createWorker({ config, store }) {
           retryAttempts: Number(aiResult.retryAttempts) || 1,
           perImageFallbackUsed: Boolean(aiResult.perImageFallbackUsed),
           emergencyUsed: Boolean(aiResult.emergencyUsed),
+          usage: aiResult.usage || null,
+          imageProcessing: aiResult.imageProcessing || [],
           analyzedImageIndexes: aiResult.analyzedImageIndexes || []
         }
       };

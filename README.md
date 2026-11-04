@@ -261,6 +261,43 @@ Tutte le variabili sono documentate in `.env.example`:
 | `PROPFIND/GET/PUT/...` | `/webdav/*` | Sincronizzazione WebDAV del vault Obsidian |
 | `POST` | `/api/vault/rebuild-artifacts` | Rigenera indici e mappe di tutte le materie |
 
+## Ottimizzazione immagini e token
+
+Prima dell’invio all’AI il server:
+
+1. corregge l’orientamento EXIF;
+2. stima il colore di sfondo;
+3. rileva il bounding box del contenuto;
+4. rimuove i margini esterni;
+5. verifica che il crop non elimini più del 2% dei pixel di contenuto;
+6. in caso di dubbio invia l’immagine originale;
+7. ridimensiona a un massimo prudente di 1600 px;
+8. converte in JPEG qualità 88.
+
+Il crop delle bande vuote interne non viene applicato automaticamente: è troppo rischioso per figure, formule e note a margine.
+
+Configurazione:
+
+```env
+IMAGE_MAX_SIDE=1600
+IMAGE_JPEG_QUALITY=88
+IMAGE_CROP_ENABLED=true
+IMAGE_CROP_ANALYSIS_SIDE=640
+IMAGE_CROP_THRESHOLD=24
+IMAGE_CROP_PADDING_RATIO=0.02
+IMAGE_CROP_MAX_INK_LOSS_RATIO=0.02
+IMAGE_CROP_MIN_CONTENT_RATIO=0.08
+```
+
+Ogni risposta AI salva anche:
+
+- token di input;
+- token di output;
+- token in cache;
+- immagini elaborate;
+- crop applicato o rifiutato;
+- dimensioni originali e finali.
+
 ## Affidabilità analisi multi-immagine
 
 Le richieste Gemini vengono ritentate automaticamente su errori transitori:

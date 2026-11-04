@@ -1,5 +1,14 @@
 # Changelog
 
+## Ottimizzazione immagini e token — 2026-11-03
+
+- Crop sicuro dei margini con verifica della perdita di contenuto.
+- Fallback all’immagine originale quando il crop è incerto.
+- Ridimensionamento prudente a 1600 px.
+- Tracking di token input/output/cache per job.
+- Statistiche immagini elaborate, crop e dimensioni finali.
+- Visualizzazione dei token nell’app Android e nella Web UI.
+
 ## Claude Batch Haiku → Sonnet — 2026-11-03
 
 - Aggiunto provider Claude/Anthropic.

@@ -8,27 +8,70 @@ import { claudeAnalyze } from './claude.js';
 import { uniqueStrings } from '../utils.js';
 import { buildAiVaultContext } from '../vault-analysis.js';
 import sharp from 'sharp';
+import { optimizeImageForAi } from '../image-optimizer.js';
 
-export async function serializeImage(file) {
+export async function serializeImage(file, config = {}) {
   const original = readFileSync(file.absolutePath);
   let buffer = original;
   let mimeType = file.mimeType || 'image/jpeg';
+  let processing = {
+    name: path.basename(file.absolutePath),
+    cropApplied: false,
+    cropReason: 'ottimizzazione non applicata',
+    originalWidth: null,
+    originalHeight: null,
+    width: null,
+    height: null,
+    outputBytes: original.length
+  };
   try {
-    buffer = await sharp(original)
-      .rotate()
-      .resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true })
-      .flatten({ background: '#ffffff' })
-      .jpeg({ quality: 86, mozjpeg: true })
-      .toBuffer();
-    mimeType = 'image/jpeg';
-  } catch {
-    // Se il formato non è supportato da sharp, invia l'originale al provider.
+    const optimized = await optimizeImageForAi(file.absolutePath, {
+      maxSide: config.imageMaxSide,
+      quality: config.imageJpegQuality,
+      cropEnabled: config.imageCropEnabled,
+      analysisSide: config.imageCropAnalysisSide,
+      threshold: config.imageCropThreshold,
+      paddingRatio: config.imageCropPaddingRatio,
+      maxInkLossRatio: config.imageCropMaxInkLossRatio,
+      minContentRatio: config.imageCropMinContentRatio
+    });
+    buffer = optimized.buffer;
+    mimeType = optimized.mimeType;
+    processing = {
+      name: path.basename(file.absolutePath),
+      cropApplied: optimized.cropApplied,
+      cropReason: optimized.cropReason,
+      cropBox: optimized.cropBox,
+      cropMetrics: optimized.cropMetrics,
+      originalWidth: optimized.originalWidth,
+      originalHeight: optimized.originalHeight,
+      width: optimized.width,
+      height: optimized.height,
+      maxSide: optimized.maxSide,
+      outputBytes: optimized.outputBytes
+    };
+  } catch (error) {
+    try {
+      buffer = await sharp(original)
+        .rotate()
+        .resize({ width: Number(config.imageMaxSide) || 1600, height: Number(config.imageMaxSide) || 1600, fit: 'inside', withoutEnlargement: true })
+        .flatten({ background: '#ffffff' })
+        .jpeg({ quality: Number(config.imageJpegQuality) || 88, mozjpeg: true })
+        .toBuffer();
+      mimeType = 'image/jpeg';
+      processing.cropReason = `fallback senza crop: ${error.message}`;
+      processing.outputBytes = buffer.length;
+    } catch {
+      // Se il formato non è supportato da sharp, invia l'originale al provider.
+      processing.cropReason = `immagine originale inviata: ${error.message}`;
+    }
   }
   return {
     mimeType,
     dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
     base64: buffer.toString('base64'),
-    name: path.basename(file.absolutePath)
+    name: path.basename(file.absolutePath),
+    processing
   };
 }
 
@@ -104,6 +147,21 @@ function normalizeResultFigureIndexes(result, expectedIndexes) {
   return result;
 }
 
+function mergeUsage(usages) {
+  const valid = usages.filter(Boolean);
+  if (!valid.length) return null;
+  const total = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0, batchRequests: 0, batchApi: false };
+  for (const usage of valid) {
+    total.inputTokens += Number(usage.inputTokens) || 0;
+    total.outputTokens += Number(usage.outputTokens) || 0;
+    total.totalTokens += Number(usage.totalTokens) || (Number(usage.inputTokens) || 0) + (Number(usage.outputTokens) || 0);
+    total.cachedInputTokens += Number(usage.cachedInputTokens) || 0;
+    total.batchRequests += Number(usage.batchRequests) || 0;
+    total.batchApi = total.batchApi || Boolean(usage.batchApi);
+  }
+  return total;
+}
+
 function mergeNotesByTitle(notes) {
   const merged = [];
   const byTitle = new Map();
@@ -175,7 +233,9 @@ function mergePartialResults(results, expectedIndexes, batchError) {
     ]),
     analyzedImageIndexes: [...expectedIndexes],
     perImageFallbackUsed: true,
-    retryAttempts: Math.max(...results.map((result) => Number(result.retryAttempts) || 1))
+    retryAttempts: Math.max(...results.map((result) => Number(result.retryAttempts) || 1)),
+    usage: mergeUsage(results.map((result) => result.usage)),
+    imageProcessing: results.flatMap((result) => result.imageProcessing || [])
   };
 }
 
@@ -257,6 +317,7 @@ export function normalizeAiResult(raw, fallback = {}) {
     notes,
     noteCount: notes.length,
     analyzedImageIndexes: normalizeAnalyzedIndexes(result.analyzedImageIndexes || result.analyzed_image_indexes),
+    usage: raw._providerUsage || null,
     title: notes[0].title,
     course: String(result.course || notes[0].course || fallback.course || '').trim(),
     subject: String(result.subject || notes[0].subject || fallback.subject || '').trim(),
@@ -355,6 +416,7 @@ async function runProviderWithRetries({ providerConfig, prompt, images, metadata
       if (missing.length === 0) {
         result.analyzedImageIndexes = expectedIndexes;
         result.retryAttempts = attempt;
+        result.imageProcessing = images.map((image) => image.processing || { name: image.name });
         return result;
       }
       lastError = new Error(`Il provider non ha analizzato tutte le immagini (mancanti: ${missing.map((index) => index + 1).join(', ')}).`);
@@ -400,7 +462,7 @@ ATTENZIONE: questa richiesta contiene UNA SOLA immagine (indice originale ${inde
 }
 
 export async function analyzeImages({ config, files, metadata, vaultNotes, vaultAnalysis, matchedSubject }) {
-  const images = await Promise.all(files.map(serializeImage));
+  const images = await Promise.all(files.map((file) => serializeImage(file, config)));
   const existingTitles = vaultNotes
     .map((note) => note.title)
     .filter(Boolean)

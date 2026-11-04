@@ -396,7 +396,7 @@ test('DeepSeek Flash usa l’API OpenAI-compatible con input immagine', async ()
         tags: [], aliases: [], keyConcepts: [], conceptRelations: [], figures: [], links: [], confidence: 0.9, warnings: []
       }]
     };
-    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(result) } }] }), {
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(result) } }], usage: { prompt_tokens: 800, completion_tokens: 200, total_tokens: 1000, prompt_tokens_details: { cached_tokens: 50 } } }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
@@ -431,6 +431,9 @@ test('DeepSeek Flash usa l’API OpenAI-compatible con input immagine', async ()
     assert.ok(userParts.some((part) => part.type === 'image_url' && part.image_url.url.startsWith('data:image/jpeg;base64,')));
     assert.equal(result.title, 'Nota DeepSeek');
     assert.deepEqual(result.analyzedImageIndexes, [0]);
+    assert.equal(result.usage.inputTokens, 800);
+    assert.equal(result.usage.outputTokens, 200);
+    assert.equal(result.usage.cachedInputTokens, 50);
   } finally {
     global.fetch = originalFetch;
     rmSync(root, { recursive: true, force: true });
@@ -476,7 +479,7 @@ test('Claude Haiku usa Message Batches con immagini e completa il polling', asyn
         custom_id: createBody.requests[0].custom_id,
         result: {
           type: 'succeeded',
-          message: { content: [{ type: 'text', text: JSON.stringify(result) }] }
+          message: { content: [{ type: 'text', text: JSON.stringify(result) }], usage: { input_tokens: 1200, output_tokens: 345, cache_read_input_tokens: 100 } }
         }
       });
       return new Response(line + '\n', { status: 200, headers: { 'Content-Type': 'application/x-jsonlines' } });
@@ -515,6 +518,10 @@ test('Claude Haiku usa Message Batches con immagini e completa il polling', asyn
     assert.equal(result.title, 'Nota Claude');
     assert.deepEqual(result.analyzedImageIndexes, [0]);
     assert.equal(result.notes[0].figures[0].sourceImageIndex, 0);
+    assert.equal(result.usage.inputTokens, 1200);
+    assert.equal(result.usage.outputTokens, 345);
+    assert.equal(result.usage.cachedInputTokens, 100);
+    assert.equal(result.imageProcessing.length, 1);
   } finally {
     global.fetch = originalFetch;
     rmSync(root, { recursive: true, force: true });

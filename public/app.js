@@ -211,6 +211,16 @@ function renderDialog(job) {
   const isSaved = Boolean(job.vault_path) || (Array.isArray(job.vault_paths) && job.vault_paths.length > 0);
   const links = job.links_json || result.links || [];
   const warnings = job.warnings_json || result.warnings || [];
+  const aiInfo = result.ai || {};
+  const aiUsage = aiInfo.usage || null;
+  const imageProcessing = Array.isArray(aiInfo.imageProcessing) ? aiInfo.imageProcessing : [];
+  const croppedCount = imageProcessing.filter((image) => image?.cropApplied).length;
+  const usageHtml = aiUsage
+    ? `<br><strong>Token AI:</strong> input ${Number(aiUsage.inputTokens) || 0} · output ${Number(aiUsage.outputTokens) || 0}${Number(aiUsage.cachedInputTokens) ? ` · cache ${Number(aiUsage.cachedInputTokens)}` : ''}`
+    : '';
+  const imageProcessingHtml = imageProcessing.length
+    ? `<br><strong>Immagini:</strong> ${imageProcessing.length} · ritagliate ${croppedCount}`
+    : '';
   const title = result.title || job.requested_title || job.course || 'Appunti';
   $('#dialog-title').textContent = title;
   $('#dialog-status').className = `badge badge-${job.status}`;
@@ -232,7 +242,7 @@ function renderDialog(job) {
           <p><strong>Corso:</strong> ${escapeHtml(job.course || result.course || '—')}<br>
           <strong>Data:</strong> ${escapeHtml(formatDate(job.lesson_date || result.date))}<br>
           <strong>Tag:</strong> ${escapeHtml((job.user_tags || result.tags || []).join(', ') || '—')}<br>
-          <strong>Confidenza AI:</strong> ${typeof job.confidence === 'number' ? Math.round(job.confidence * 100) + '%' : '—'}</p>
+          <strong>Confidenza AI:</strong> ${typeof job.confidence === 'number' ? Math.round(job.confidence * 100) + '%' : '—'}${usageHtml}${imageProcessingHtml}</p>
           ${warningsHtml}
         </div>
         <div class="detail-card">

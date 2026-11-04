@@ -61,5 +61,13 @@ export async function geminiAnalyze({ config, prompt, images }) {
     const blockReason = data?.promptFeedback?.blockReason;
     throw new Error(blockReason ? `Gemini ha bloccato la richiesta: ${blockReason}` : 'Gemini non ha restituito contenuto.');
   }
-  return parseAiJson(text);
+  const parsed = parseAiJson(text);
+  parsed._providerUsage = {
+    inputTokens: Number(data.usageMetadata?.promptTokenCount) || 0,
+    outputTokens: Number(data.usageMetadata?.candidatesTokenCount) || 0,
+    totalTokens: Number(data.usageMetadata?.totalTokenCount) || (Number(data.usageMetadata?.promptTokenCount) || 0) + (Number(data.usageMetadata?.candidatesTokenCount) || 0),
+    cachedInputTokens: Number(data.usageMetadata?.cachedContentTokenCount) || 0,
+    batchRequests: 0
+  };
+  return parsed;
 }
