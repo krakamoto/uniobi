@@ -4,6 +4,8 @@ const state = {
   detailTimer: null,
   markdownDirty: false,
   files: [],
+  maxFiles: 50,
+  maxUploadMb: 20,
   authenticated: false
 };
 
@@ -127,6 +129,10 @@ async function checkAuth() {
 async function loadHealth() {
   try {
     const health = await api('/api/health');
+    if (Number.isInteger(health.maxFilesPerUpload) && health.maxFilesPerUpload > 0) state.maxFiles = health.maxFilesPerUpload;
+    if (Number.isFinite(Number(health.maxUploadMb)) && Number(health.maxUploadMb) > 0) state.maxUploadMb = Number(health.maxUploadMb);
+    const uploadLimitHint = $('#upload-limit-hint');
+    if (uploadLimitHint) uploadLimitHint.textContent = `Puoi caricare più pagine insieme. Max ${state.maxFiles} file, ${state.maxUploadMb} MB ciascuno.`;
     $('#provider-badge').textContent = health.aiProvider === 'mock' ? 'Demo · provider mock' : `AI · ${health.aiProvider}`;
     if (!health.vaultWritable) {
       $('#provider-badge').textContent += ' · vault non scrivibile';
@@ -154,11 +160,16 @@ function renderFiles() {
 
 function addFiles(fileList) {
   const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
+  let limitReached = false;
   for (const file of fileList) {
     if (!allowed.includes(file.type) && !/\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name)) continue;
-    if (state.files.length >= 10) break;
+    if (state.files.length >= state.maxFiles) {
+      limitReached = true;
+      break;
+    }
     state.files.push(file);
   }
+  if (limitReached) showToast(`Puoi caricare al massimo ${state.maxFiles} immagini per volta.`, 'error');
   renderFiles();
 }
 

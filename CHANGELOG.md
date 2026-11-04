@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.6 — 2026-11-05
+
+- Limite upload aumentato da 10 a 50 immagini per volta.
+- Limite web letto dinamicamente da `MAX_FILES_PER_UPLOAD` tramite `/api/health`.
+- Selettore Android aggiornato a 50 immagini.
+- Web UI e messaggi di errore aggiornati con il limite effettivo.
+- Test di integrazione con 12 immagini in un singolo upload.
+
 ## Ottimizzazione immagini e token — 2026-11-03
 
 - Crop sicuro dei margini con verifica della perdita di contenuto.

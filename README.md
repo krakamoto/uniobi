@@ -195,7 +195,7 @@ Tutte le variabili sono documentate in `.env.example`:
 | `DATABASE_URL` | `sqlite:///./data/database/uniai.db` | Percorso database SQLite |
 | `UPLOAD_DIR` | `./data/uploads` | Cartella degli originali |
 | `MAX_UPLOAD_MB` | `20` | Dimensione massima per file |
-| `MAX_FILES_PER_UPLOAD` | `10` | Numero massimo di immagini per job |
+| `MAX_FILES_PER_UPLOAD` | `50` | Numero massimo di immagini per job |
 | `OBSIDIAN_VAULT_PATH` | `./obsidian-vault` | Percorso del vault Obsidian |
 | `OBSIDIAN_NOTES_SUBDIR` | `Università/Lezioni` | Sottocartella di destinazione per materie non riconosciute |
 | `OBSIDIAN_SUBJECT_ROOTS` | vuota | Cartelle che contengono una sottocartella per ogni materia; separate da virgola |

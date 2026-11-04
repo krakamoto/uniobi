@@ -196,6 +196,65 @@ test('flusso end-to-end: upload, analisi mock, salvataggio atomico nel vault', a
   assert.ok(existsSync(path.join(vaultPath, 'NuovaCartella', 'spostata.md')));
 });
 
+
+test('upload accetta più di 10 immagini in un singolo job', async (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-many-images-'));
+  const uploadDir = path.join(root, 'uploads');
+  const vaultPath = path.join(root, 'vault');
+  const databasePath = path.join(root, 'uniai.db');
+  mkdirSync(uploadDir, { recursive: true });
+  mkdirSync(vaultPath, { recursive: true });
+
+  const config = loadConfig({
+    ...process.env,
+    APP_PASSWORD: '',
+    DATABASE_URL: databasePath,
+    UPLOAD_DIR: uploadDir,
+    OBSIDIAN_VAULT_PATH: vaultPath,
+    AI_PROVIDER: 'mock',
+    AUTO_SAVE_TO_VAULT: 'false',
+    WORKER_POLL_MS: '0',
+    MAX_FILES_PER_UPLOAD: '50'
+  }, root);
+
+  assert.equal(config.maxFilesPerUpload, 50);
+  const store = createStore(config.databasePath);
+  const worker = createWorker({ config, store });
+  const app = createApp({ config, store, worker });
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  const { port } = server.address();
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  t.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    await worker.waitForIdle();
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const form = new FormData();
+  for (let index = 1; index <= 12; index += 1) {
+    form.append('files', new Blob([PNG_1X1], { type: 'image/png' }), `pagina-${index}.png`);
+  }
+  form.append('course', 'Analisi Matematica II');
+
+  const uploadResponse = await fetch(`${baseUrl}/api/uploads`, { method: 'POST', body: form });
+  assert.equal(uploadResponse.status, 202);
+  const uploadPayload = await uploadResponse.json();
+  assert.ok(uploadPayload.job.id);
+
+  const detailResponse = await fetch(`${baseUrl}/api/jobs/${uploadPayload.job.id}`);
+  assert.equal(detailResponse.status, 200);
+  const detailPayload = await detailResponse.json();
+  assert.equal(detailPayload.job.files.length, 12);
+
+  const healthResponse = await fetch(`${baseUrl}/api/health`);
+  assert.equal(healthResponse.status, 200);
+  const healthPayload = await healthResponse.json();
+  assert.equal(healthPayload.maxFilesPerUpload, 50);
+});
+
 test('scanVault legge titoli e alias dalle note esistenti', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'uniai-vault-'));
   try {

@@ -82,7 +82,7 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     obsidianNewSubjectRoot: String(env.OBSIDIAN_NEW_SUBJECT_ROOT || '').trim(),
     obsidianSubjectAttachmentsSubdir: String(env.OBSIDIAN_SUBJECT_ATTACHMENTS_SUBDIR || 'Allegati').replace(/^\/+|\/+$/g, ''),
     maxUploadMb: number(env.MAX_UPLOAD_MB, 20),
-    maxFilesPerUpload: number(env.MAX_FILES_PER_UPLOAD, 10),
+    maxFilesPerUpload: Math.max(1, Math.floor(number(env.MAX_FILES_PER_UPLOAD, 50))),
     imageMaxSide,
     imageJpegQuality,
     imageCropEnabled,

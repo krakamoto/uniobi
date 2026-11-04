@@ -128,6 +128,8 @@ export function createApp({ config, store, worker }) {
       vaultConfigured: Boolean(config.vaultPath),
       vaultWritable: vaultIsWritable(config.vaultPath, config.notesSubdir),
       autoSaveToVault: config.autoSaveToVault,
+      maxFilesPerUpload: config.maxFilesPerUpload,
+      maxUploadMb: config.maxUploadMb,
       webdavEnabled: config.webdavEnabled,
       webdavPath: config.webdavPath,
       cookieSecure: config.cookieSecure,

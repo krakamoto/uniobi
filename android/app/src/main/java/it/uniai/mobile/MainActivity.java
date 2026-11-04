@@ -65,6 +65,7 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PICK_IMAGES = 4001;
+    private static final int MAX_SELECTED_IMAGES = 50;
     private static final int REQUEST_CAMERA = 4002;
     private static final int REQUEST_NETWORK_PERMISSIONS = 4003;
     private static final int TAB_UPLOAD = 0;
@@ -1417,7 +1418,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 33) {
             try {
                 Intent picker = new Intent(MediaStore.ACTION_PICK_IMAGES);
-                picker.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, 10);
+                picker.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MAX_SELECTED_IMAGES);
                 startActivityForResult(picker, REQUEST_PICK_IMAGES);
                 return;
             } catch (ActivityNotFoundException ignored) {
@@ -1481,8 +1482,8 @@ public class MainActivity extends Activity {
 
     private void addSelectedUri(Uri uri) {
         if (uri == null) return;
-        if (selectedFiles.size() >= 10) {
-            toast("Puoi caricare al massimo 10 immagini per volta.");
+        if (selectedFiles.size() >= MAX_SELECTED_IMAGES) {
+            toast("Puoi caricare al massimo " + MAX_SELECTED_IMAGES + " immagini per volta.");
             return;
         }
         ContentResolver resolver = getContentResolver();

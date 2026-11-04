@@ -14,7 +14,7 @@ Le release intermedie e i relativi tag vengono eliminati per evitare duplicati e
 
 | Tag | Ruolo | Contenuto |
 | --- | --- | --- |
-| `v2.5-android` | Ultima stabile | APK, AAB e ZIP con tracking token, crop immagini e Claude Batch |
+| `v2.6-android` | Ultima stabile | APK, AAB e ZIP con upload fino a 50 immagini |
 | `v2.1-android` | Milestone Android 17 | Fix critico `ACCESS_LOCAL_NETWORK` per server LAN |
 | `v1.0-android` | Prima release storica | Primo pacchetto Android distribuibile |
 
