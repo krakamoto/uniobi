@@ -77,6 +77,40 @@ Il provider invia le immagini a Gemini come `inlineData`, richiede output JSON e
 
 > Antigravity è un ambiente/agente di sviluppo e non il provider di inferenza runtime. Il progetto può essere sviluppato e verificato con Antigravity, ma l’analisi delle foto a runtime passa dalla Gemini API ufficiale.
 
+#### Claude Haiku 5.5 e Sonnet 5.5 con Batch API
+
+Claude può essere configurato con Haiku 5.5 come modello primario e Sonnet 5.5 come fallback quando il risultato manca di precisione.
+
+Configurazione:
+
+```env
+AI_PROVIDER=claude
+AI_MODEL=claude-haiku-5-5
+AI_BASE_URL=https://api.anthropic.com
+AI_API_KEY=sk-ant-...
+AI_MAX_OUTPUT_TOKENS=32768
+AI_CLAUDE_USE_BATCH=true
+AI_CLAUDE_BATCH_POLL_MS=10000
+AI_CLAUDE_BATCH_TIMEOUT_MS=21600000
+AI_FALLBACK_ENABLED=true
+AI_FALLBACK_PROVIDER=claude
+AI_FALLBACK_MODEL=claude-sonnet-5-5
+AI_FALLBACK_BASE_URL=https://api.anthropic.com
+AI_FALLBACK_API_KEY=
+```
+
+Con `AI_CLAUDE_USE_BATCH=true` il server usa la Message Batches API di Anthropic, che applica uno sconto del 50% sui token. Il batch è asincrono: il job resta in elaborazione mentre il worker esegue polling. Il timeout predefinito è 6 ore.
+
+Se il risultato di Haiku è incompleto o ha confidenza bassa, viene richiesto un batch a Sonnet 5.5. Per evitare interruzioni è possibile configurare un provider di emergenza:
+
+```env
+AI_EMERGENCY_ENABLED=true
+AI_EMERGENCY_PROVIDER=deepseek
+AI_EMERGENCY_MODEL=deepseek-flash
+AI_EMERGENCY_BASE_URL=https://api.deepseek.com
+AI_EMERGENCY_API_KEY=...
+```
+
 #### DeepSeek Flash
 
 DeepSeek Flash (`deepseek-flash`, servito da DeepSeek-V4.1-Flash) supporta input testuali e immagini ed espone un’API OpenAI-compatible. Può essere usato come provider primario o come fallback di Gemini.
@@ -102,6 +136,14 @@ AI_FALLBACK_API_KEY=la_tua_chiave_deepseek
 ```
 
 Il provider DeepSeek disabilita automaticamente il thinking mode per l’estrazione JSON vision e imposta un limite output di 32768 token, evitando risposte vuote causate dal consumo di tutti i token nel reasoning.
+
+Inserisci la chiave Anthropic nel file `/home/giacomo/UniAi/uniai/.env` alla riga:
+
+```env
+AI_API_KEY=sk-ant-...
+```
+
+`AI_FALLBACK_API_KEY` può restare vuota: Sonnet 5.5 usa automaticamente la stessa chiave. Il file `.env` è escluso da Git.
 
 La chiave DeepSeek non è inclusa nel repository. Senza chiave il provider non può essere testato con una chiamata reale.
 

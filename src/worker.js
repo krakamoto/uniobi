@@ -181,6 +181,7 @@ export function createWorker({ config, store }) {
           fallbackReason: aiResult.fallbackReason || '',
           retryAttempts: Number(aiResult.retryAttempts) || 1,
           perImageFallbackUsed: Boolean(aiResult.perImageFallbackUsed),
+          emergencyUsed: Boolean(aiResult.emergencyUsed),
           analyzedImageIndexes: aiResult.analyzedImageIndexes || []
         }
       };

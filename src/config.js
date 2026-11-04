@@ -39,6 +39,18 @@ export function loadConfig(env = process.env, root = process.cwd()) {
   if (aiFallbackEnabled && !aiFallbackModel) {
     throw new Error('AI_FALLBACK_MODEL è obbligatorio quando AI_FALLBACK_ENABLED=true.');
   }
+  const aiMaxOutputTokens = Math.max(0, number(env.AI_MAX_OUTPUT_TOKENS, 0));
+  const aiRetryMaxAttempts = Math.max(1, number(env.AI_RETRY_MAX_ATTEMPTS, 8));
+  const aiRetryBaseDelayMs = Math.max(0, number(env.AI_RETRY_BASE_DELAY_MS, 2000));
+  const aiRetryMaxDelayMs = Math.max(0, number(env.AI_RETRY_MAX_DELAY_MS, 30000));
+  const aiClaudeUseBatch = bool(env.AI_CLAUDE_USE_BATCH, true);
+  const aiClaudeBatchPollMs = Math.max(0, number(env.AI_CLAUDE_BATCH_POLL_MS, 10000));
+  const aiClaudeBatchTimeoutMs = Math.max(1000, number(env.AI_CLAUDE_BATCH_TIMEOUT_MS, 21600000));
+  const aiEmergencyEnabled = bool(env.AI_EMERGENCY_ENABLED, false);
+  const aiEmergencyModel = String(env.AI_EMERGENCY_MODEL || '').trim();
+  if (aiEmergencyEnabled && !aiEmergencyModel) {
+    throw new Error('AI_EMERGENCY_MODEL è obbligatorio quando AI_EMERGENCY_ENABLED=true.');
+  }
 
   const rawDatabase = String(env.DATABASE_URL || '').trim();
   const databaseRelative = rawDatabase
@@ -76,6 +88,18 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     aiFallbackMinConfidence: number(env.AI_FALLBACK_MIN_CONFIDENCE, 0.7),
     aiFallbackOnIllegible: bool(env.AI_FALLBACK_ON_ILLEGIBLE, true),
     aiFallbackMinCharsPerImage: number(env.AI_FALLBACK_MIN_CHARS_PER_IMAGE, 80),
+    aiEmergencyEnabled,
+    aiEmergencyProvider: (env.AI_EMERGENCY_PROVIDER || 'deepseek').toLowerCase(),
+    aiEmergencyModel,
+    aiEmergencyApiKey: env.AI_EMERGENCY_API_KEY || '',
+    aiEmergencyBaseUrl: env.AI_EMERGENCY_BASE_URL || '',
+    aiClaudeUseBatch,
+    aiClaudeBatchPollMs,
+    aiClaudeBatchTimeoutMs,
+    aiMaxOutputTokens,
+    aiRetryMaxAttempts,
+    aiRetryBaseDelayMs,
+    aiRetryMaxDelayMs,
     autoSaveToVault: bool(env.AUTO_SAVE_TO_VAULT, false),
     allowCreateMissingWikilinks: bool(env.ALLOW_CREATE_MISSING_WIKILINKS, false),
     workerPollMs: number(env.WORKER_POLL_MS, 1500),

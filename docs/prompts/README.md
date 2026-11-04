@@ -9,6 +9,7 @@ Prompt riutilizzabili per evolvere il progetto in modo coerente.
 - [Resilienza server](server-resilience.md) — watchdog, health check, systemd e riavvio automatico.
 - [Retry Gemini e copertura immagini](gemini-retry-coverage.md) — retry su 503, analisi per singola foto e niente note parziali.
 - [DeepSeek Flash](deepseek-flash-provider.md) — provider vision OpenAI-compatible come alternativa o fallback.
+- [Claude Batch Haiku → Sonnet](claude-batch-haiku-sonnet.md) — Haiku 5.5 primario, Sonnet 5.5 per precisione e Batch API al 50%.
 
 ## Regole per nuovi prompt
 

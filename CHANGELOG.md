@@ -1,5 +1,14 @@
 # Changelog
 
+## Claude Batch Haiku → Sonnet — 2026-11-03
+
+- Aggiunto provider Claude/Anthropic.
+- Haiku 5.5 primario e Sonnet 5.5 per fallback di precisione.
+- Supporto Message Batches API con sconto del 50%.
+- Polling del batch e recupero dei risultati JSONL.
+- Fallback di emergenza DeepSeek configurabile.
+- Testato il flusso batch con mock e la catena di emergenza.
+
 ## Provider DeepSeek Flash — 2026-11-03
 
 - Aggiunto provider `deepseek` con API OpenAI-compatible.

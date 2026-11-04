@@ -437,6 +437,133 @@ test('DeepSeek Flash usa l’API OpenAI-compatible con input immagine', async ()
   }
 });
 
+test('Claude Haiku usa Message Batches con immagini e completa il polling', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-claude-batch-'));
+  const imagePath = path.join(root, 'appunti.png');
+  writeFileSync(imagePath, PNG_1X1);
+  const originalFetch = global.fetch;
+  let createBody = null;
+  let createHeaders = null;
+  let resultsRequested = false;
+  global.fetch = async (url, options = {}) => {
+    const target = String(url);
+    if (target.endsWith('/v1/messages/batches') && options.method === 'POST') {
+      createBody = JSON.parse(options.body);
+      createHeaders = options.headers;
+      return new Response(JSON.stringify({ id: 'msgbatch_test', processing_status: 'in_progress' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (target.endsWith('/v1/messages/batches/msgbatch_test') && options.method === 'GET') {
+      return new Response(JSON.stringify({ id: 'msgbatch_test', processing_status: 'ended', results_url: 'https://api.anthropic.com/v1/messages/batches/msgbatch_test/results' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (target.endsWith('/v1/messages/batches/msgbatch_test/results')) {
+      resultsRequested = true;
+      const result = {
+        analyzedImageIndexes: [0],
+        course: 'Test',
+        subject: 'Test',
+        date: '2026-11-03',
+        summary: 'Analisi Claude',
+        confidence: 0.9,
+        warnings: [],
+        notes: [{
+          title: 'Nota Claude',
+          markdown: '# Nota Claude\n\nContenuto completo.',
+          extractedText: 'Trascrizione Claude completa.',
+          tags: [], aliases: [], keyConcepts: [], conceptRelations: [], figures: [], links: [], confidence: 0.9, warnings: []
+        }]
+      };
+      const line = JSON.stringify({
+        custom_id: createBody.requests[0].custom_id,
+        result: {
+          type: 'succeeded',
+          message: { content: [{ type: 'text', text: JSON.stringify(result) }] }
+        }
+      });
+      return new Response(line + '\n', { status: 200, headers: { 'Content-Type': 'application/x-jsonlines' } });
+    }
+    throw new Error(`URL inatteso: ${target}`);
+  };
+
+  try {
+    const result = await analyzeImages({
+      config: {
+        aiProvider: 'claude',
+        aiModel: 'claude-haiku-5-5',
+        aiApiKey: 'claude-test-key',
+        aiBaseUrl: 'https://api.anthropic.com',
+        aiMaxOutputTokens: 32768,
+        aiClaudeUseBatch: true,
+        aiClaudeBatchPollMs: 0,
+        aiClaudeBatchTimeoutMs: 10000,
+        aiFallbackEnabled: false,
+        aiFallbackMinConfidence: 0.7,
+        aiFallbackOnIllegible: true,
+        aiFallbackMinCharsPerImage: 10,
+        aiRetryMaxAttempts: 1,
+        aiRetryBaseDelayMs: 0,
+        aiRetryMaxDelayMs: 0
+      },
+      files: [{ absolutePath: imagePath, mimeType: 'image/png', originalName: 'appunti.png' }],
+      metadata: { course: 'Test', date: '2026-11-03', title: '', tags: [], userNotes: '', files: [] },
+      vaultNotes: []
+    });
+    assert.equal(createBody.requests[0].params.model, 'claude-haiku-5-5');
+    assert.equal(createBody.requests[0].params.max_tokens, 32768);
+    assert.equal(createHeaders['anthropic-version'], '2023-06-01');
+    assert.ok(createBody.requests[0].params.messages[0].content.some((part) => part.type === 'image' && part.source.type === 'base64'));
+    assert.equal(resultsRequested, true);
+    assert.equal(result.title, 'Nota Claude');
+    assert.deepEqual(result.analyzedImageIndexes, [0]);
+  } finally {
+    global.fetch = originalFetch;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Claude usa il provider di emergenza se primario e fallback non hanno chiave', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-claude-emergency-'));
+  const imagePath = path.join(root, 'appunti.png');
+  writeFileSync(imagePath, PNG_1X1);
+  try {
+    const result = await analyzeImages({
+      config: {
+        aiProvider: 'claude',
+        aiModel: 'claude-haiku-5-5',
+        aiApiKey: '',
+        aiBaseUrl: 'https://api.anthropic.com',
+        aiMaxOutputTokens: 32768,
+        aiClaudeUseBatch: true,
+        aiClaudeBatchPollMs: 0,
+        aiClaudeBatchTimeoutMs: 10000,
+        aiFallbackEnabled: true,
+        aiFallbackProvider: 'claude',
+        aiFallbackModel: 'claude-sonnet-5-5',
+        aiFallbackApiKey: '',
+        aiFallbackBaseUrl: 'https://api.anthropic.com',
+        aiFallbackMinConfidence: 0.7,
+        aiFallbackOnIllegible: true,
+        aiFallbackMinCharsPerImage: 10,
+        aiEmergencyEnabled: true,
+        aiEmergencyProvider: 'mock',
+        aiEmergencyModel: 'mock-emergency',
+        aiEmergencyApiKey: '',
+        aiEmergencyBaseUrl: '',
+        aiRetryMaxAttempts: 1,
+        aiRetryBaseDelayMs: 0,
+        aiRetryMaxDelayMs: 0
+      },
+      files: [{ absolutePath: imagePath, mimeType: 'image/png', originalName: 'appunti.png' }],
+      metadata: { course: 'Test', date: '2026-11-03', title: '', tags: [], userNotes: '', files: [] },
+      vaultNotes: []
+    });
+    assert.equal(result.emergencyUsed, true);
+    assert.equal(result.notes.length > 0, true);
+    assert.deepEqual(result.analyzedImageIndexes, [0]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('Gemini ritenta gli errori 503 e verifica la copertura di tutte le immagini', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'uniai-ai-retry-'));
   const imageA = path.join(root, 'a.png');

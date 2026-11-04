@@ -4,6 +4,7 @@ import { mockAnalyze } from './mock.js';
 import { openAiAnalyze } from './openai.js';
 import { ollamaAnalyze } from './ollama.js';
 import { geminiAnalyze } from './gemini.js';
+import { claudeAnalyze } from './claude.js';
 import { uniqueStrings } from '../utils.js';
 import { buildAiVaultContext } from '../vault-analysis.js';
 import sharp from 'sharp';
@@ -266,10 +267,13 @@ async function runProvider({ providerConfig, prompt, images, metadata, files, va
       }));
     case 'gemini':
       return normalizeAiResult(await geminiAnalyze({ config: providerConfig, prompt, images }));
+    case 'claude':
+    case 'anthropic':
+      return normalizeAiResult(await claudeAnalyze({ config: providerConfig, prompt, images }));
     case 'ollama':
       return normalizeAiResult(await ollamaAnalyze({ config: providerConfig, prompt, images }));
     default:
-      throw new Error(`Provider AI non supportato: ${providerConfig.aiProvider}. Usa mock, gemini, deepseek, openai, openai-compatible, openrouter o ollama.`);
+      throw new Error(`Provider AI non supportato: ${providerConfig.aiProvider}. Usa mock, gemini, deepseek, claude, anthropic, openai, openai-compatible, openrouter o ollama.`);
   }
 }
 
@@ -311,7 +315,7 @@ async function runProviderWithRetries({ providerConfig, prompt, images, metadata
   const maxAttempts = Math.max(1, Number(providerConfig.aiRetryMaxAttempts) || 1);
   const baseDelay = Math.max(0, Number(providerConfig.aiRetryBaseDelayMs) || 0);
   const maxDelay = Math.max(0, Number(providerConfig.aiRetryMaxDelayMs) || 0);
-  const needsCoverage = providerConfig.aiProvider === 'gemini' && expectedIndexes.length > 0;
+  const needsCoverage = ['gemini', 'claude', 'anthropic'].includes(providerConfig.aiProvider) && expectedIndexes.length > 0;
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -451,10 +455,18 @@ Regole precise basate sul vault reale:
     aiApiKey: config.aiFallbackApiKey,
     aiBaseUrl: config.aiFallbackBaseUrl
   };
+  const emergencyConfig = {
+    ...config,
+    aiProvider: config.aiEmergencyProvider,
+    aiModel: config.aiEmergencyModel,
+    aiApiKey: config.aiEmergencyApiKey,
+    aiBaseUrl: config.aiEmergencyBaseUrl
+  };
   const fallbackDecision = primary
     ? shouldUseAdvancedFallback(primary, files, config)
     : { needed: Boolean(config.aiFallbackEnabled && config.aiFallbackModel), reason: `provider primario fallito: ${primaryError?.message || primaryError}` };
 
+  let fallbackError = null;
   if (fallbackDecision.needed) {
     try {
       const advanced = await runProviderResilient({
@@ -471,21 +483,59 @@ Regole precise basate sul vault reale:
       advanced.fallbackAttempted = true;
       advanced.fallbackReason = fallbackDecision.reason;
       return advanced;
-    } catch (fallbackError) {
+    } catch (error) {
+      fallbackError = error;
+    }
+  }
+
+  const needEmergency = Boolean(config.aiEmergencyEnabled && config.aiEmergencyModel && (primaryError || fallbackError));
+  if (needEmergency) {
+    try {
+      const emergency = await runProviderResilient({
+        providerConfig: emergencyConfig,
+        prompt,
+        images,
+        metadata,
+        files,
+        vaultNotes
+      });
+      emergency.modelUsed = emergencyConfig.aiModel;
+      emergency.primaryModel = config.aiModel;
+      emergency.fallbackUsed = true;
+      emergency.fallbackAttempted = true;
+      emergency.emergencyUsed = true;
+      emergency.fallbackReason = uniqueStrings([
+        fallbackDecision.reason,
+        fallbackError ? `fallback ${fallbackConfig.aiModel} fallito: ${fallbackError.message}` : ''
+      ]).join('; ');
+      return emergency;
+    } catch (emergencyError) {
       if (!primary) {
-        throw new Error(`Provider primario fallito (${primaryError?.message || primaryError}). Fallback ${fallbackConfig.aiModel} fallito: ${fallbackError.message}`);
+        throw new Error(`Provider primario fallito (${primaryError?.message || primaryError}). Fallback ${fallbackConfig.aiModel} fallito: ${fallbackError?.message || 'non tentato'}. Emergenza ${emergencyConfig.aiModel} fallita: ${emergencyError.message}`);
       }
       primary.warnings = uniqueStrings([
         ...(primary.warnings || []),
-        `Fallback ${fallbackConfig.aiModel} non riuscito: ${fallbackError.message}`
+        fallbackError ? `Fallback ${fallbackConfig.aiModel} non riuscito: ${fallbackError.message}` : '',
+        `Provider di emergenza ${emergencyConfig.aiModel} non riuscito: ${emergencyError.message}`
       ]);
-      primary.fallbackAttempted = true;
+      primary.fallbackAttempted = Boolean(fallbackError);
       primary.fallbackUsed = false;
       primary.fallbackReason = fallbackDecision.reason;
       return primary;
     }
   }
 
-  if (!primary) throw primaryError;
+  if (!primary) {
+    throw new Error(`Provider primario fallito (${primaryError?.message || primaryError}). ${fallbackError ? `Fallback ${fallbackConfig.aiModel} fallito: ${fallbackError.message}` : ''}`);
+  }
+  if (fallbackError) {
+    primary.warnings = uniqueStrings([
+      ...(primary.warnings || []),
+      `Fallback ${fallbackConfig.aiModel} non riuscito: ${fallbackError.message}`
+    ]);
+    primary.fallbackAttempted = true;
+    primary.fallbackUsed = false;
+    primary.fallbackReason = fallbackDecision.reason;
+  }
   return primary;
 }
