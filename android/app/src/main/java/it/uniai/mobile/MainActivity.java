@@ -603,10 +603,7 @@ public class MainActivity extends Activity {
             image.setBackgroundColor(SURFACE_ALT);
             image.setContentDescription("Anteprima " + (index + 1));
             image.setOnClickListener(view -> showReviewImagesDialog());
-            try {
-                image.setImageURI(part.uri);
-            } catch (Exception ignored) {
-            }
+            ThumbnailLoader.load(this, part.uri, dp(88), image);
             frame.addView(image, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
             TextView remove = text("×", 18, ON_PRIMARY, Typeface.BOLD);
@@ -1092,7 +1089,7 @@ public class MainActivity extends Activity {
             ImageView image = new ImageView(this);
             image.setScaleType(ImageView.ScaleType.CENTER_CROP);
             image.setContentDescription("Immagine " + (index + 1));
-            try { image.setImageURI(part.uri); } catch (Exception ignored) {}
+            ThumbnailLoader.load(this, part.uri, dp(72), image);
             row.addView(image, new LinearLayout.LayoutParams(dp(72), dp(72)));
 
             TextView name = text((index + 1) + ". " + part.fileName, 12, TEXT, Typeface.NORMAL);
@@ -1470,27 +1467,42 @@ public class MainActivity extends Activity {
             return;
         }
         if (requestCode == REQUEST_PICK_IMAGES && resultCode == RESULT_OK && data != null) {
+            List<Uri> picked = new ArrayList<>();
             if (data.getClipData() != null) {
                 for (int i = 0; i < data.getClipData().getItemCount(); i++) {
-                    addSelectedUri(data.getClipData().getItemAt(i).getUri());
+                    Uri uri = data.getClipData().getItemAt(i).getUri();
+                    if (uri != null) picked.add(uri);
                 }
             } else if (data.getData() != null) {
-                addSelectedUri(data.getData());
+                picked.add(data.getData());
             }
+            addSelectedUris(picked);
         }
     }
 
     private void addSelectedUri(Uri uri) {
         if (uri == null) return;
-        if (selectedFiles.size() >= MAX_SELECTED_IMAGES) {
-            toast("Puoi caricare al massimo " + MAX_SELECTED_IMAGES + " immagini per volta.");
-            return;
-        }
+        List<Uri> single = new ArrayList<>();
+        single.add(uri);
+        addSelectedUris(single);
+    }
+
+    private void addSelectedUris(List<Uri> uris) {
+        if (uris == null || uris.isEmpty()) return;
         ContentResolver resolver = getContentResolver();
-        String mime = resolver.getType(uri);
-        String name = ApiClient.displayName(resolver, uri);
-        selectedFiles.add(new UploadPart(uri, mime == null ? "image/jpeg" : mime, name));
-        renderSelectedFiles();
+        int added = 0;
+        for (Uri uri : uris) {
+            if (uri == null) continue;
+            if (selectedFiles.size() >= MAX_SELECTED_IMAGES) {
+                toast("Puoi caricare al massimo " + MAX_SELECTED_IMAGES + " immagini per volta.");
+                break;
+            }
+            String mime = resolver.getType(uri);
+            String name = ApiClient.displayName(resolver, uri);
+            selectedFiles.add(new UploadPart(uri, mime == null ? "image/jpeg" : mime, name));
+            added += 1;
+        }
+        if (added > 0) renderSelectedFiles();
     }
 
     private void cleanupCameraUri() {

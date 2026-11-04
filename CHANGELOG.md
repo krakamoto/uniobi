@@ -1,5 +1,13 @@
 # Changelog
 
+## Stabilità selezione 50 immagini — 2026-11-05
+
+- Miniature della selezione caricate con `inSampleSize` e `RGB_565`.
+- Rimozione del decoding a piena risoluzione tramite `ImageView.setImageURI`.
+- Rendering batch dopo la selezione multipla.
+- Aggiornamento del dettaglio immagini senza ricreare 50 decode duplicati.
+- Versione Android 2.7.
+
 ## 2.6 — 2026-11-05
 
 - Limite upload aumentato da 10 a 50 immagini per volta.
