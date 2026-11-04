@@ -70,10 +70,38 @@ function normalizeAnalyzedIndexes(value) {
   return [...new Set(value.map(Number).filter((index) => Number.isInteger(index) && index >= 0))];
 }
 
+function normalizeOneBasedIndexes(indexes, expectedIndexes = []) {
+  const expected = [...new Set(expectedIndexes.map(Number).filter((index) => Number.isInteger(index) && index >= 0))];
+  const reported = normalizeAnalyzedIndexes(indexes);
+  if (!expected.includes(0) || reported.length === 0 || reported.includes(0)) return reported;
+  if (!reported.every((index) => index >= 1 && index <= expected.length)) return reported;
+  if (reported.length !== expected.length && expected.length !== 1) return reported;
+  return reported.map((index) => index - 1);
+}
+
 export function missingImageIndexes(result, expectedIndexes = []) {
   const expected = [...new Set(expectedIndexes.map(Number).filter((index) => Number.isInteger(index) && index >= 0))];
-  const reported = normalizeAnalyzedIndexes(result?.analyzedImageIndexes || result?.analyzed_image_indexes);
+  const reported = normalizeOneBasedIndexes(result?.analyzedImageIndexes || result?.analyzed_image_indexes, expected);
   return expected.filter((index) => !reported.includes(index));
+}
+
+function normalizeResultFigureIndexes(result, expectedIndexes) {
+  const expected = [...new Set(expectedIndexes.map(Number).filter((index) => Number.isInteger(index) && index >= 0))];
+  const figures = (result.notes || []).flatMap((note) => note.figures || []);
+  if (!expected.includes(0) || figures.length === 0) return result;
+  const raw = figures.map((figure) => Number(figure.sourceImageIndex)).filter(Number.isInteger);
+  const needsShift = raw.length > 0
+    && !raw.includes(0)
+    && raw.every((index) => index >= 1 && index <= expected.length)
+    && (expected.length === 1 || raw.some((index) => index === expected.length));
+  if (!needsShift) return result;
+  for (const note of result.notes || []) {
+    for (const figure of note.figures || []) {
+      if (Number.isInteger(Number(figure.sourceImageIndex))) figure.sourceImageIndex = Number(figure.sourceImageIndex) - 1;
+    }
+  }
+  result.figures = (result.notes || []).flatMap((note) => note.figures || []);
+  return result;
 }
 
 function mergeNotesByTitle(notes) {
@@ -322,6 +350,7 @@ async function runProviderWithRetries({ providerConfig, prompt, images, metadata
     try {
       const result = await runProvider({ providerConfig, prompt, images, metadata, files, vaultNotes });
       if (!result.notes?.length) throw new Error('Il provider AI non ha prodotto note complete.');
+      normalizeResultFigureIndexes(result, expectedIndexes);
       const missing = needsCoverage ? missingImageIndexes(result, expectedIndexes) : [];
       if (missing.length === 0) {
         result.analyzedImageIndexes = expectedIndexes;
@@ -407,7 +436,7 @@ Regole precise basate sul vault reale:
 8b. Per schemi, grafici, tabelle, circuiti o disegni presenti nelle immagini, NON ridisegnarli e NON inventare immagini o URL. Restituisci un array figures con ritaglio dell'immagine originale: id, sourceImageIndex (indice 0-based dell'immagine caricata), bbox normalizzato [x,y,width,height] da 0 a 1, caption e kind. Inserisci nel markdown il placeholder {{id}} nel punto in cui deve comparire la figura. Se non ci sono figure da ritagliare, usa figures: [].
 9. Estrai 3-10 concetti chiave atomici e alcune relazioni concettuali per ogni nota. Usa termini coerenti con la terminologia delle note esistenti.
 10. Non includere frontmatter YAML: il backend lo genera. Il campo markdown deve contenere solo il corpo della nota.
-11. Ogni immagine allegata deve essere analizzata: non omettere nessuna foto. Inserisci nel campo analyzedImageIndexes TUTTI gli indici 0-based delle immagini che hai effettivamente letto. Se una foto è illeggibile, includila comunque e segnalalo nei warnings.
+11. Ogni immagine allegata deve essere analizzata: non omettere nessuna foto. Inserisci nel campo analyzedImageIndexes TUTTI gli indici delle immagini che hai effettivamente letto, usando indici 0-based (la prima immagine è 0, non 1). Se una foto è illeggibile, includila comunque e segnalalo nei warnings.
 12. Restituisci ESCLUSIVAMENTE un oggetto JSON valido, senza testo fuori dal JSON, con questa forma:
 {
   "course": "Nome corso indicato o dedotto",

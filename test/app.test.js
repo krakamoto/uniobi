@@ -458,7 +458,7 @@ test('Claude Haiku usa Message Batches con immagini e completa il polling', asyn
     if (target.endsWith('/v1/messages/batches/msgbatch_test/results')) {
       resultsRequested = true;
       const result = {
-        analyzedImageIndexes: [0],
+        analyzedImageIndexes: [1],
         course: 'Test',
         subject: 'Test',
         date: '2026-11-03',
@@ -469,7 +469,7 @@ test('Claude Haiku usa Message Batches con immagini e completa il polling', asyn
           title: 'Nota Claude',
           markdown: '# Nota Claude\n\nContenuto completo.',
           extractedText: 'Trascrizione Claude completa.',
-          tags: [], aliases: [], keyConcepts: [], conceptRelations: [], figures: [], links: [], confidence: 0.9, warnings: []
+          tags: [], aliases: [], keyConcepts: [], conceptRelations: [], figures: [{ id: 'fig1', sourceImageIndex: 1, bbox: [0.1, 0.1, 0.2, 0.2], caption: 'Test', kind: 'diagram' }], links: [], confidence: 0.9, warnings: []
         }]
       };
       const line = JSON.stringify({
@@ -514,6 +514,7 @@ test('Claude Haiku usa Message Batches con immagini e completa il polling', asyn
     assert.equal(resultsRequested, true);
     assert.equal(result.title, 'Nota Claude');
     assert.deepEqual(result.analyzedImageIndexes, [0]);
+    assert.equal(result.notes[0].figures[0].sourceImageIndex, 0);
   } finally {
     global.fetch = originalFetch;
     rmSync(root, { recursive: true, force: true });
