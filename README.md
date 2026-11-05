@@ -348,7 +348,8 @@ Quando nel vault esistono sia una nota numerata sia un vecchio duplicato senza n
 La rigenerazione degli indici:
 
 - elimina le voci duplicate;
-- verifica che ogni link dell'indice punti a un file Markdown reale;
+- conserva i percorsi relativi completi verso i file reali;
+- verifica che ogni link dell'indice punti a un file Markdown esistente;
 - mantiene una sola voce per nota canonica;
 - rigenera i conteggi delle note.
 

@@ -4,7 +4,7 @@
 
 - Gli indici ignorano i duplicati senza numero quando esiste la nota numerata.
 - Eliminate 57 voci duplicate dagli indici.
-- Ogni link degli indici punta a un file Markdown reale.
+- Ogni link degli indici punta a un file Markdown reale tramite percorso relativo completo.
 
 ## Wikilink numerati tra note — 2026-11-05
 

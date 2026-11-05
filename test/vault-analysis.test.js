@@ -10,7 +10,7 @@ import {
   rebuildAllVaultArtifacts,
   rebuildArtifactsForFile
 } from '../src/vault-analysis.js';
-import { findVaultNote, safeVaultDestination, saveNoteToVault, saveNotesToVault, scanVault } from '../src/vault.js';
+import { findVaultNote, normalizeVaultWikilinks, safeVaultDestination, saveNoteToVault, saveNotesToVault, scanVault } from '../src/vault.js';
 import { validateLatexDelimiters } from '../src/markdown.js';
 
 test('analisi del vault: riconosce materie e genera gli indici', () => {
@@ -182,6 +182,23 @@ test('gli indici non duplicano note ombreggiate da una versione numerata', () =>
       .filter((target) => /Carica\.md$|Carica$/.test(target));
     assert.equal(caricaLinks.length, 1);
     assert.match(caricaLinks[0], /01 Carica$/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test('normalizeVaultWikilinks conserva i percorsi relativi validi negli indici', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-index-paths-'));
+  try {
+    const dir = path.join(root, 'Materia');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, 'Nota.md'), '# Nota\n');
+    writeFileSync(path.join(dir, '_Indice.md'), '# Indice\n\n- [[Materia/Nota|Nota]]\n');
+    const result = normalizeVaultWikilinks({ vaultPath: root, dryRun: false });
+    assert.equal(result.rewrittenLinks, 0);
+    const index = readFileSync(path.join(dir, '_Indice.md'), 'utf8');
+    assert.match(index, /\[\[Materia\/Nota\|Nota\]\]/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

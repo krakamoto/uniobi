@@ -137,6 +137,12 @@ export function normalizeVaultWikilinks({ vaultPath, dryRun = true }) {
       if (!target) return full;
       const targetLeaf = target.split('/').pop();
       if (/^\d{2,5}\s+/.test(targetLeaf)) return full;
+      // Un percorso relativo valido deve restare tale: è il collegamento
+      // più affidabile dentro agli indici e alle sottocartelle.
+      if (target.includes('/')) {
+        const relativeTarget = path.join(vaultPath, target);
+        if (existsSync(`${relativeTarget}.md`) || existsSync(relativeTarget)) return full;
+      }
       const resolved = findVaultNote(target, notes);
       if (!resolved || resolved.title === target) return full;
       rewritten += 1;
