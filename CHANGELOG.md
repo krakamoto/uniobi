@@ -1,5 +1,12 @@
 # Changelog
 
+## Fix selezione PDF Android — 2026-11-05
+
+- Risolto conflitto tra `REQUEST_PICK_PDF` e `REQUEST_CAMERA`.
+- Il PDF selezionato viene ora aggiunto correttamente alla lista.
+- Messaggio esplicito quando il selettore PDF restituisce un risultato vuoto.
+- Versione Android 2.9.1.
+
 ## PDF a blocchi e UI 2.9 — 2026-11-05
 
 - PDF divisi automaticamente in parti da massimo 6 pagine.

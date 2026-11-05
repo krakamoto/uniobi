@@ -67,7 +67,7 @@ public class MainActivity extends Activity {
     private static final int REQUEST_PICK_IMAGES = 4001;
     private static final int REQUEST_PICK_PDF = 4002;
     private static final int MAX_SELECTED_IMAGES = 50;
-    private static final int REQUEST_CAMERA = 4002;
+    private static final int REQUEST_CAMERA = 4004;
     private static final int REQUEST_NETWORK_PERMISSIONS = 4003;
     private static final int TAB_UPLOAD = 0;
     private static final int TAB_QUEUE = 1;
@@ -1504,7 +1504,11 @@ public class MainActivity extends Activity {
             } else if (data.getData() != null) {
                 picked.add(data.getData());
             }
-            addSelectedUris(picked);
+            if (picked.isEmpty()) {
+                toast("Nessun PDF selezionato.");
+            } else {
+                addSelectedUris(picked);
+            }
         }
     }
 
