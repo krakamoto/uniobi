@@ -1,5 +1,12 @@
 # Changelog
 
+## Rinumerazione note — 2026-11-05
+
+- Aggiunto `vault:renumber` per verificare i buchi di numerazione.
+- Aggiunto `vault:renumber:apply` per rinumerare e aggiornare i wikilink.
+- Rinumerate 28 note generate da UniAi in spaceflight e aerospace dynamic systems analysis.
+- Indici rigenerati e zero wikilink orfani.
+
 ## Pulizia wikilink orfani — 2026-11-05
 
 - Aggiunto scanner dei wikilink verso note inesistenti.

@@ -341,6 +341,29 @@ Per minimizzare i token:
 
 I token effettivi vengono registrati per ogni job in `data/ai-usage.jsonl` e mostrati nel dettaglio dell’attività.
 
+## Rinumerazione delle note
+
+Le note generate da UniAi possono essere rinumerate senza buchi:
+
+```bash
+npm run vault:renumber        # controllo senza modifiche
+npm run vault:renumber:apply  # rinumera e aggiorna i wikilink
+```
+
+Per includere anche note numerate non generate da UniAi:
+
+```bash
+node --disable-warning=ExperimentalWarning src/cli/renumber-vault.js --write --all
+```
+
+La rinumerazione:
+
+- ordina le note per numero attuale;
+- assegna numeri progressivi `001`, `002`, `003`…;
+- rinomina i file;
+- aggiorna i wikilink che usano il vecchio nome;
+- ricostruisce gli indici delle materie.
+
 ## Pulizia dei wikilink orfani
 
 Quando una nota viene cancellata da Obsidian, i wikilink nelle altre note possono restare orfani.
