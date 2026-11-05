@@ -206,7 +206,7 @@ public class MainActivity extends Activity {
 
         LinearLayout uploadTab = createTabContent();
         uploadTab.addView(text("Nuova lezione", 26, TEXT, Typeface.BOLD));
-        uploadTab.addView(text("Scatta o scegli più foto, controlla l'ordine e mettile in coda. Il caricamento partirà appena il server sarà raggiungibile.", 13, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+        uploadTab.addView(text("Scatta o scegli foto e PDF, controlla l'ordine e mettili in coda. Il caricamento partirà appena il server sarà raggiungibile.", 13, MUTED, Typeface.NORMAL), matchTop(dp(4)));
         uploadTab.addView(uploadCard(), matchTop(dp(14)));
 
         LinearLayout queueTab = createTabContent();

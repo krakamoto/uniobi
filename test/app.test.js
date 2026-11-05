@@ -348,7 +348,7 @@ test('PDF multi-pagina viene diviso in parti e completato dal worker', async (t)
     PDF_PAGES_PER_ANALYSIS: '3',
     PDF_MAX_ANALYSIS_PARTS: '10',
     PDF_MAX_PAGES_PER_JOB: '20',
-    PAPER_MAX_PAGES_PER_FILE: '20'
+    PDF_MAX_PAGES_PER_FILE: '20'
   }, root);
 
   const store = createStore(config.databasePath);
