@@ -49,6 +49,8 @@ export function loadConfig(env = process.env, root = process.cwd()) {
   const imageCropMinContentRatio = Math.max(0.01, Math.min(0.8, number(env.IMAGE_CROP_MIN_CONTENT_RATIO, 0.08)));
   const aiMaxOutputTokens = Math.max(0, number(env.AI_MAX_OUTPUT_TOKENS, 0));
   const aiRetryMaxAttempts = Math.max(1, number(env.AI_RETRY_MAX_ATTEMPTS, 8));
+  const aiPerImageFallbackMaxImages = Math.max(1, Math.floor(number(env.AI_PER_IMAGE_FALLBACK_MAX_IMAGES, 6)));
+  const aiMaxProviderCallsPerJob = Math.max(1, Math.floor(number(env.AI_MAX_PROVIDER_CALLS_PER_JOB, 10)));
   const aiRetryBaseDelayMs = Math.max(0, number(env.AI_RETRY_BASE_DELAY_MS, 2000));
   const aiRetryMaxDelayMs = Math.max(0, number(env.AI_RETRY_MAX_DELAY_MS, 30000));
   const aiClaudeUseBatch = bool(env.AI_CLAUDE_USE_BATCH, true);
@@ -114,6 +116,8 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     aiClaudeBatchTimeoutMs,
     aiMaxOutputTokens,
     aiRetryMaxAttempts,
+    aiPerImageFallbackMaxImages,
+    aiMaxProviderCallsPerJob,
     aiRetryBaseDelayMs,
     aiRetryMaxDelayMs,
     autoSaveToVault: bool(env.AUTO_SAVE_TO_VAULT, false),

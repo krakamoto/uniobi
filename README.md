@@ -261,6 +261,37 @@ Tutte le variabili sono documentate in `.env.example`:
 | `PROPFIND/GET/PUT/...` | `/webdav/*` | Sincronizzazione WebDAV del vault Obsidian |
 | `POST` | `/api/vault/rebuild-artifacts` | Rigenera indici e mappe di tutte le materie |
 
+## Controllo costi AI
+
+Sono attivi limiti anti-costo:
+
+```env
+AI_RETRY_MAX_ATTEMPTS=4
+AI_PER_IMAGE_FALLBACK_MAX_IMAGES=6
+AI_MAX_PROVIDER_CALLS_PER_JOB=10
+AI_FALLBACK_ON_ILLEGIBLE=false
+```
+
+Regole:
+
+- il fallback foto-per-foto è consentito solo fino a 6 immagini;
+- su gruppi più grandi non vengono create decine di richieste separate;
+- massimo 10 chiamate AI per job;
+- Sonnet non viene chiamato solo perché compare un warning di illeggibilità;
+- l’output richiesto è più conciso per ridurre i token di risposta.
+
+Ogni job completato registra i token in:
+
+```text
+data/ai-usage.jsonl
+```
+
+Riepilogo:
+
+```bash
+npm run ai:usage
+```
+
 ## Ottimizzazione immagini e token
 
 Prima dell’invio all’AI il server:

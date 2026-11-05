@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { existsSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { analyzeImages } from './ai/index.js';
 import { buildFinalMarkdown } from './markdown.js';
 import { selectWikilinks, saveNotesToVault } from './vault.js';
@@ -187,6 +187,22 @@ export function createWorker({ config, store }) {
           analyzedImageIndexes: aiResult.analyzedImageIndexes || []
         }
       };
+
+      try {
+        const usageLogPath = path.join(config.projectRoot, 'data', 'ai-usage.jsonl');
+        mkdirSync(path.dirname(usageLogPath), { recursive: true });
+        appendFileSync(usageLogPath, JSON.stringify({
+          jobId,
+          createdAt,
+          course: baseCourse,
+          subject: baseSubject,
+          fileCount: files.length,
+          noteCount: preparedNotes.length,
+          ai: resultJson.ai
+        }) + '\n');
+      } catch (logError) {
+        console.warn(`[usage] impossibile salvare il log token: ${logError.message}`);
+      }
 
       store.updateJob(jobId, {
         status: 'completed',

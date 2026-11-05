@@ -695,6 +695,48 @@ test('Gemini ritenta gli errori 503 e verifica la copertura di tutte le immagini
   }
 });
 
+test('oltre la soglia non avvia un fallback foto-per-foto costoso', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-cost-guard-'));
+  const files = [];
+  for (let i = 0; i < 7; i += 1) {
+    const file = path.join(root, `foto-${i}.png`);
+    writeFileSync(file, PNG_1X1);
+    files.push({ absolutePath: file, mimeType: 'image/png', originalName: `foto-${i}.png` });
+  }
+  const originalFetch = global.fetch;
+  let calls = 0;
+  global.fetch = async () => {
+    calls += 1;
+    return new Response('high demand', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+  };
+  try {
+    await assert.rejects(() => analyzeImages({
+      config: {
+        aiProvider: 'gemini',
+        aiModel: 'gemini-test',
+        aiApiKey: 'test-key',
+        aiBaseUrl: 'https://example.test',
+        aiFallbackEnabled: false,
+        aiFallbackMinConfidence: 0.7,
+        aiFallbackOnIllegible: false,
+        aiFallbackMinCharsPerImage: 10,
+        aiPerImageFallbackMaxImages: 6,
+        aiMaxProviderCallsPerJob: 10,
+        aiRetryMaxAttempts: 1,
+        aiRetryBaseDelayMs: 0,
+        aiRetryMaxDelayMs: 0
+      },
+      files,
+      metadata: { course: 'Test', date: '2026-11-03', title: '', tags: [], userNotes: '', files: [] },
+      vaultNotes: []
+    }), /disattivato oltre 6 foto/);
+    assert.equal(calls, 1);
+  } finally {
+    global.fetch = originalFetch;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('se il batch Gemini fallisce analizza ogni foto separatamente', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'uniai-ai-per-image-'));
   const imageA = path.join(root, 'a.png');

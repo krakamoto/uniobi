@@ -1,5 +1,15 @@
 # Changelog
 
+## Controllo costi AI — 2026-11-05
+
+- Limite al fallback foto-per-foto: massimo 6 immagini.
+- Massimo 10 chiamate AI per job.
+- Retry ridotti a 4 tentativi.
+- Fallback Sonnet non più attivato da ogni warning di illeggibilità.
+- Output Markdown e trascrizione più concisi.
+- Log persistente dei token in `data/ai-usage.jsonl`.
+- Comando `npm run ai:usage` per il riepilogo.
+
 ## Stabilità selezione 50 immagini — 2026-11-05
 
 - Miniature della selezione caricate con `inSampleSize` e `RGB_565`.

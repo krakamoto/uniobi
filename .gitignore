@@ -16,3 +16,5 @@ dist/
 *.keystore
 
 public/downloads/
+
+data/ai-usage.jsonl

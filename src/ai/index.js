@@ -400,7 +400,7 @@ export function shouldUseAdvancedFallback(result, files, config) {
   return { needed: reasons.length > 0, reason: reasons.join('; ') };
 }
 
-async function runProviderWithRetries({ providerConfig, prompt, images, metadata, files, vaultNotes, expectedIndexes }) {
+async function runProviderWithRetries({ providerConfig, prompt, images, metadata, files, vaultNotes, expectedIndexes, budget }) {
   const maxAttempts = Math.max(1, Number(providerConfig.aiRetryMaxAttempts) || 1);
   const baseDelay = Math.max(0, Number(providerConfig.aiRetryBaseDelayMs) || 0);
   const maxDelay = Math.max(0, Number(providerConfig.aiRetryMaxDelayMs) || 0);
@@ -408,6 +408,10 @@ async function runProviderWithRetries({ providerConfig, prompt, images, metadata
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (budget) {
+      budget.calls += 1;
+      if (budget.calls > budget.max) throw new Error(`Budget massimo di ${budget.max} chiamate AI per job superato.`);
+    }
     try {
       const result = await runProvider({ providerConfig, prompt, images, metadata, files, vaultNotes });
       if (!result.notes?.length) throw new Error('Il provider AI non ha prodotto note complete.');
@@ -440,6 +444,10 @@ async function runProviderResilient(options) {
     return await runProviderWithRetries({ ...options, expectedIndexes });
   } catch (batchError) {
     if (options.images.length <= 1) throw batchError;
+    const maxPerImage = Math.max(1, Number(options.providerConfig.aiPerImageFallbackMaxImages) || 6);
+    if (options.images.length > maxPerImage) {
+      throw new Error(`Analisi batch incompleta su ${options.images.length} foto. Fallback per singola immagine disattivato oltre ${maxPerImage} foto per evitare costi eccessivi.`);
+    }
     const partials = [];
     for (let index = 0; index < options.images.length; index += 1) {
       const singlePrompt = `${options.prompt}
@@ -462,6 +470,7 @@ ATTENZIONE: questa richiesta contiene UNA SOLA immagine (indice originale ${inde
 }
 
 export async function analyzeImages({ config, files, metadata, vaultNotes, vaultAnalysis, matchedSubject }) {
+  const budget = { calls: 0, max: Math.max(1, Number(config.aiMaxProviderCallsPerJob) || 10) };
   const images = await Promise.all(files.map((file) => serializeImage(file, config)));
   const existingTitles = vaultNotes
     .map((note) => note.title)
@@ -530,7 +539,7 @@ Regole precise basate sul vault reale:
   let primary = null;
   let primaryError = null;
   try {
-    primary = await runProviderResilient({ providerConfig: config, prompt, images, metadata, files, vaultNotes });
+    primary = await runProviderResilient({ providerConfig: config, prompt, images, metadata, files, vaultNotes, budget });
     primary.modelUsed = config.aiModel;
     primary.fallbackUsed = false;
     primary.fallbackAttempted = false;
@@ -566,7 +575,8 @@ Regole precise basate sul vault reale:
         images,
         metadata,
         files,
-        vaultNotes
+        vaultNotes,
+        budget
       });
       advanced.modelUsed = fallbackConfig.aiModel;
       advanced.primaryModel = config.aiModel;
@@ -588,7 +598,8 @@ Regole precise basate sul vault reale:
         images,
         metadata,
         files,
-        vaultNotes
+        vaultNotes,
+        budget
       });
       emergency.modelUsed = emergencyConfig.aiModel;
       emergency.primaryModel = config.aiModel;

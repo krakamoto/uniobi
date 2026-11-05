@@ -11,6 +11,7 @@ Prompt riutilizzabili per evolvere il progetto in modo coerente.
 - [DeepSeek Flash](deepseek-flash-provider.md) — provider vision OpenAI-compatible come alternativa o fallback.
 - [Claude Batch Haiku → Sonnet](claude-batch-haiku-sonnet.md) — Haiku 5.5 primario, Sonnet 5.5 per precisione e Batch API al 50%.
 - [Ottimizzazione immagini e token](image-token-optimization.md) — crop sicuro, resize prudente e tracking dei token.
+- [Controllo costi AI](ai-cost-control.md) — limiti a retry, fallback e chiamate per job.
 
 ## Regole per nuovi prompt
 
