@@ -10,6 +10,7 @@ import { analyzeVaultStructure, matchSubject, rebuildAllVaultArtifacts, suggeste
 import { materializeFiguresForNotes } from './figures.js';
 import { createRateLimiter, securityHeaders } from './security.js';
 import { statfsSync } from 'node:fs';
+import { validatePdfUploads } from './pdf.js';
 
 const MIME_EXTENSIONS = {
   'image/jpeg': '.jpg',
@@ -17,8 +18,26 @@ const MIME_EXTENSIONS = {
   'image/webp': '.webp',
   'image/gif': '.gif',
   'image/heic': '.heic',
-  'image/heif': '.heif'
+  'image/heif': '.heif',
+  'application/pdf': '.pdf'
 };
+const EXTENSION_MIME_TYPES = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
+  '.pdf': 'application/pdf'
+};
+
+function resolvedUploadType(file) {
+  const mime = String(file?.mimetype || '').toLowerCase();
+  if (MIME_EXTENSIONS[mime]) return { mimeType: mime, extension: MIME_EXTENSIONS[mime] };
+  const extension = path.extname(String(file?.originalname || '')).toLowerCase();
+  return { mimeType: EXTENSION_MIME_TYPES[extension] || 'application/octet-stream', extension: EXTENSION_MIME_TYPES[extension] ? extension : '' };
+}
 
 function parseCookies(header = '') {
   const cookies = {};
@@ -130,6 +149,11 @@ export function createApp({ config, store, worker }) {
       autoSaveToVault: config.autoSaveToVault,
       maxFilesPerUpload: config.maxFilesPerUpload,
       maxUploadMb: config.maxUploadMb,
+      maxAiImagesPerJob: config.maxAiImagesPerJob,
+      pdfMaxPagesPerFile: config.pdfMaxPagesPerFile,
+      pdfMaxPagesPerJob: config.pdfMaxPagesPerJob,
+      pdfRecommendedPagesPerJob: config.pdfRecommendedPagesPerJob,
+      pdfTextExtractionEnabled: config.pdfTextExtractionEnabled,
       webdavEnabled: config.webdavEnabled,
       webdavPath: config.webdavPath,
       cookieSecure: config.cookieSecure,
@@ -177,8 +201,8 @@ export function createApp({ config, store, worker }) {
       },
       filename(req, file, callback) {
         req.fileCounter = (req.fileCounter || 0) + 1;
-        const extension = MIME_EXTENSIONS[file.mimetype] || path.extname(file.originalname).toLowerCase() || '.img';
-        callback(null, `image-${req.fileCounter}${extension}`);
+        const uploadType = resolvedUploadType(file);
+        callback(null, `file-${req.fileCounter}${uploadType.extension || '.bin'}`);
       }
     }),
     limits: {
@@ -186,26 +210,40 @@ export function createApp({ config, store, worker }) {
       files: config.maxFilesPerUpload
     },
     fileFilter(req, file, callback) {
-      if (!MIME_EXTENSIONS[file.mimetype]) {
-        return callback(new Error(`Tipo file non supportato: ${file.mimetype || file.originalname}. Carica JPG, PNG, WebP, GIF, HEIC o HEIF.`));
+      const uploadType = resolvedUploadType(file);
+      if (!uploadType.extension) {
+        return callback(new Error(`Tipo file non supportato: ${file.mimetype || file.originalname}. Carica JPG, PNG, WebP, GIF, HEIC, HEIF o PDF.`));
       }
       callback(null, true);
     }
   });
 
-  app.post('/api/uploads', requireAuth, uploadLimiter, upload.array('files', config.maxFilesPerUpload), (req, res) => {
+  app.post('/api/uploads', requireAuth, uploadLimiter, upload.array('files', config.maxFilesPerUpload), async (req, res) => {
     if (!req.files || req.files.length === 0) {
       if (req.uploadDir) rmSync(req.uploadDir, { recursive: true, force: true });
-      return res.status(400).json({ error: 'Nessun file ricevuto. Seleziona almeno una foto degli appunti.' });
+      return res.status(400).json({ error: 'Nessun file ricevuto. Seleziona almeno una foto o un PDF degli appunti.' });
     }
 
     const tags = uniqueStrings(String(req.body.tags || '').split(','));
-    const sourceFiles = req.files.map((file) => ({
-      relativePath: path.relative(config.uploadDir, file.path).split(path.sep).join('/'),
-      originalName: file.originalname,
-      mimeType: file.mimetype,
-      size: file.size
-    }));
+    const sourceFiles = req.files.map((file) => {
+      const uploadType = resolvedUploadType(file);
+      return {
+        relativePath: path.relative(config.uploadDir, file.path).split(path.sep).join('/'),
+        originalName: file.originalname,
+        mimeType: uploadType.mimeType,
+        size: file.size
+      };
+    });
+
+    try {
+      await validatePdfUploads(req.files.map((file, index) => ({
+        ...sourceFiles[index],
+        absolutePath: file.path
+      })), config);
+    } catch (error) {
+      if (req.uploadDir) rmSync(req.uploadDir, { recursive: true, force: true });
+      return res.status(400).json({ error: error.message });
+    }
 
     const job = store.insertJob({
       id: req.jobId,

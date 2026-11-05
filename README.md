@@ -1,12 +1,12 @@
 # UniAi
 
-UniAi è una web app self-hosted con app Android nativa che trasforma le foto degli appunti presi a lezione in note Markdown per Obsidian. L’analisi AI può usare Gemini, un provider OpenAI-compatibile oppure Ollama.
+UniAi è una web app self-hosted con app Android nativa che trasforma foto e PDF degli appunti presi a lezione in note Markdown per Obsidian. L’analisi AI può usare Gemini, un provider OpenAI-compatibile oppure Ollama.
 
 ## Cosa fa
 
-1. Riceve una o più foto di appunti (JPG, PNG, WebP, GIF, HEIC/HEIF).
+1. Riceve una o più foto di appunti (JPG, PNG, WebP, GIF, HEIC/HEIF) oppure PDF.
 2. Salva gli originali in una cartella persistente del server.
-3. Invia le immagini a un modello AI visione/OCR configurabile.
+3. Estrae il testo dai PDF digitali e rasterizza solo le pagine scansionate; invia al modello AI testo e immagini.
 4. Genera una nota Markdown con frontmatter YAML, tag, riassunto, formule LaTeX e callout Obsidian.
 5. Verifica i wikilink rispetto alle note realmente presenti nel vault.
 6. Mostra un’anteprima modificabile e, su conferma, salva la nota nel vault con scrittura atomica e senza sovrascrivere file esistenti.
@@ -28,6 +28,7 @@ L’app funziona subito in **modalità mock**, utile per provare il flusso senza
 ## Requisiti
 
 - Node.js **22.5 o superiore** (usa `node:sqlite`).
+- `poppler-utils` per i PDF (`pdfinfo`, `pdftotext`, `pdftoppm`). È già installato nell’immagine Docker.
 - Un vault Obsidian accessibile dal processo Node, oppure Docker.
 - Per l’AI: una chiave API OpenAI-compatibile oppure un’istanza Ollama con modello visione.
 - Solo per Docker: Docker e Docker Compose.
@@ -195,7 +196,15 @@ Tutte le variabili sono documentate in `.env.example`:
 | `DATABASE_URL` | `sqlite:///./data/database/uniai.db` | Percorso database SQLite |
 | `UPLOAD_DIR` | `./data/uploads` | Cartella degli originali |
 | `MAX_UPLOAD_MB` | `20` | Dimensione massima per file |
-| `MAX_FILES_PER_UPLOAD` | `50` | Numero massimo di immagini per job |
+| `MAX_FILES_PER_UPLOAD` | `50` | Numero massimo di file (foto + PDF) per job |
+| `PDF_TEXT_EXTRACTION_ENABLED` | `true` | Estrae il testo dai PDF digitali per risparmiare token |
+| `PDF_TEXT_PAGE_MIN_CHARS` | `80` | Sotto questa soglia una pagina PDF viene rasterizzata |
+| `PDF_MAX_TEXT_CHARS_PER_JOB` | `120000` | Tetto del testo PDF estratto per job |
+| `PDF_MAX_PAGES_PER_FILE` | `30` | Limite pagine per singolo PDF |
+| `PDF_MAX_PAGES_PER_JOB` | `24` | Limite pagine PDF totali per elaborazione |
+| `PDF_RECOMMENDED_PAGES_PER_JOB` | `6` | Numero consigliato di pagine scansionate per elaborazione |
+| `PDF_RENDER_MAX_SIDE` | `1600` | Lato massimo delle pagine PDF rasterizzate |
+| `AI_MAX_IMAGES_PER_JOB` | `50` | Tetto immagini visive (foto + pagine PDF rasterizzate) |
 | `OBSIDIAN_VAULT_PATH` | `./obsidian-vault` | Percorso del vault Obsidian |
 | `OBSIDIAN_NOTES_SUBDIR` | `Università/Lezioni` | Sottocartella di destinazione per materie non riconosciute |
 | `OBSIDIAN_SUBJECT_ROOTS` | vuota | Cartelle che contengono una sottocartella per ogni materia; separate da virgola |
@@ -225,7 +234,7 @@ Tutte le variabili sono documentate in `.env.example`:
 
 ## Flusso di utilizzo
 
-1. Seleziona una o più foto.
+1. Seleziona una o più foto e/o PDF.
 2. Compila corso, data, titolo e tag (opzionali).
 3. Premi **Carica e analizza**.
 4. Attendi lo stato **Completato**.
@@ -252,7 +261,7 @@ Tutte le variabili sono documentate in `.env.example`:
 | `POST` | `/api/uploads` | Upload multiplo e creazione job |
 | `GET` | `/api/jobs` | Storico con filtri |
 | `GET` | `/api/jobs/:id` | Dettaglio job |
-| `GET` | `/api/jobs/:id/files/:index` | Immagine originale protetta |
+| `GET` | `/api/jobs/:id/files/:index` | File originale protetto (immagine o PDF) |
 | `GET` | `/api/jobs/:id/markdown` | Markdown corrente |
 | `PUT` | `/api/jobs/:id/markdown` | Salva modifiche al Markdown |
 | `POST` | `/api/jobs/:id/retry` | Rielabora |
@@ -291,6 +300,37 @@ Il fallback Sonnet resta attivo per:
 - note vuote o senza Markdown;
 - JSON non valido;
 - errori del provider.
+
+## PDF e consumo token
+
+Il server tratta i PDF in modo ibrido:
+
+1. prova a estrarre il testo con `pdftotext`;
+2. se una pagina contiene testo sufficiente, la invia al modello come testo (molto meno costoso di un’immagine);
+3. se la pagina è scansionata, vuota o prevalentemente grafica, la rasterizza con `pdftoppm` a un massimo di 1600 px e la invia come immagine;
+4. conserva l’ordine delle pagine e usa lo stesso indice immagine per l’eventuale ritaglio delle figure.
+
+Configurazione consigliata:
+
+```env
+PDF_TEXT_EXTRACTION_ENABLED=true
+PDF_TEXT_PAGE_MIN_CHARS=80
+PDF_MAX_TEXT_CHARS_PER_JOB=120000
+PDF_MAX_PAGES_PER_FILE=30
+PDF_MAX_PAGES_PER_JOB=24
+PDF_RECOMMENDED_PAGES_PER_JOB=6
+PDF_RENDER_MAX_SIDE=1600
+AI_MAX_IMAGES_PER_JOB=50
+```
+
+Per minimizzare i token:
+
+- **PDF digitale con testo selezionabile:** 8–12 pagine per caricamento sono ragionevoli; il costo dominante diventa il testo, non le immagini.
+- **PDF scansionato o fatto di foto:** meglio **4–6 pagine per caricamento**. Ogni pagina visiva consuma tipicamente qualche migliaio di token e gruppi troppo grandi aumentano anche il rischio di output troncato e fallback costosi.
+- Per lezioni molto lunghe conviene creare più attività e poi unire/collegare le note in Obsidian.
+- Il limite massimo predefinito è 24 pagine PDF per job, ma è un tetto di sicurezza: non è il valore consigliato.
+
+I token effettivi vengono registrati per ogni job in `data/ai-usage.jsonl` e mostrati nel dettaglio dell’attività.
 
 ## Controllo costi AI
 

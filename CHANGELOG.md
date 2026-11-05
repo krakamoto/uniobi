@@ -1,5 +1,15 @@
 # Changelog
 
+## Supporto PDF — 2026-11-05
+
+- Upload di PDF oltre a JPG, PNG, WebP, GIF e HEIC/HEIF.
+- Estrazione del testo dai PDF digitali per evitare token vision inutili.
+- Rasterizzazione automatica delle sole pagine scansionate o senza testo.
+- Limiti configurabili per pagine per file, pagine per job e immagini visive.
+- Supporto PDF nella Web UI e nell’app Android (versione 2.8).
+- Docker include `poppler-utils` per `pdfinfo`, `pdftotext` e `pdftoppm`.
+- Il dettaglio job mostra quante pagine PDF sono state lette come testo o come immagine.
+
 ## Revisione manuale delle parti illeggibili — 2026-11-05
 
 - `AI_FALLBACK_ON_ILLEGIBLE=false` come default.

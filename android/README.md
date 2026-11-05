@@ -2,7 +2,7 @@
 
 Client Android nativo per UniAi. Permette di scattare o selezionare foto degli appunti, caricarli sul server e salvare la nota generata da Gemini nel vault Obsidian.
 
-Versione: **2.7**
+Versione: **2.8**
 
 ## Build
 
@@ -37,11 +37,11 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
    - emulatore: `http://10.0.2.2:3000`;
    - telefono reale: `http://IP_LAN_DEL_SERVER:3000`.
 3. Se il backend ha `APP_PASSWORD`, inserire la password.
-4. Selezionare una o più foto dalla galleria oppure scattarle con la fotocamera.
+4. Selezionare una o più foto e/o PDF dal selettore file oppure scattare una foto con la fotocamera.
 5. Scegliere un corso dal menu oppure crearne uno nuovo con **+ Corso**.
 6. La data della lezione è opzionale.
 7. Compilare gli altri metadati e premere **Metti in coda**.
-8. Le foto vengono compresse, salvate localmente e caricate automaticamente appena il server è raggiungibile.
+8. Le foto vengono compresse; i PDF vengono conservati e caricati automaticamente appena il server è raggiungibile.
 9. Aprire il job dallo storico, controllare il Markdown e premere **Salva nel vault**.
 
 I corsi creati restano salvati sul telefono. Se il backend contiene già corsi nello storico, vengono importati automaticamente nel menu.

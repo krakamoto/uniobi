@@ -576,16 +576,21 @@ public class MainActivity extends Activity {
         actionRow.addView(uploadProgress, new LinearLayout.LayoutParams(dp(34), dp(34)));
         card.addView(actionRow, matchTop(dp(16)));
 
-        uploadStatus = text("Le foto vengono salvate sul telefono e caricate automaticamente quando il server è raggiungibile.", 12, MUTED, Typeface.NORMAL);
+        uploadStatus = text("Foto e PDF vengono salvati sul telefono e caricati automaticamente quando il server è raggiungibile.", 12, MUTED, Typeface.NORMAL);
         card.addView(uploadStatus, matchTop(dp(6)));
         return card;
+    }
+
+    private boolean isPdf(UploadPart part) {
+        return part != null && ("application/pdf".equalsIgnoreCase(part.mimeType)
+            || (part.fileName != null && part.fileName.toLowerCase(Locale.ITALY).endsWith(".pdf")));
     }
 
     private void renderSelectedFiles() {
         if (selectedContainer == null) return;
         selectedContainer.removeAllViews();
         if (selectedFiles.isEmpty()) {
-            TextView empty = text("Nessuna immagine selezionata.", 12, MUTED, Typeface.NORMAL);
+            TextView empty = text("Nessun file selezionato.", 12, MUTED, Typeface.NORMAL);
             empty.setPadding(dp(2), dp(8), dp(2), dp(8));
             selectedContainer.addView(empty);
             return;
@@ -598,13 +603,22 @@ public class MainActivity extends Activity {
             if (index > 0) frameParams.setMarginStart(dp(8));
             frame.setLayoutParams(frameParams);
 
-            ImageView image = new ImageView(this);
-            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            image.setBackgroundColor(SURFACE_ALT);
-            image.setContentDescription("Anteprima " + (index + 1));
-            image.setOnClickListener(view -> showReviewImagesDialog());
-            ThumbnailLoader.load(this, part.uri, dp(88), image);
-            frame.addView(image, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            if (isPdf(part)) {
+                TextView pdf = text("PDF", 13, DANGER, Typeface.BOLD);
+                pdf.setGravity(Gravity.CENTER);
+                pdf.setBackgroundColor(SURFACE_ALT);
+                pdf.setContentDescription("PDF " + (index + 1));
+                pdf.setOnClickListener(view -> showReviewImagesDialog());
+                frame.addView(pdf, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            } else {
+                ImageView image = new ImageView(this);
+                image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                image.setBackgroundColor(SURFACE_ALT);
+                image.setContentDescription("Anteprima " + (index + 1));
+                image.setOnClickListener(view -> showReviewImagesDialog());
+                ThumbnailLoader.load(this, part.uri, dp(88), image);
+                frame.addView(image, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            }
 
             TextView remove = text("×", 18, ON_PRIMARY, Typeface.BOLD);
             remove.setGravity(Gravity.CENTER);
@@ -615,7 +629,7 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams removeParams = new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.TOP | Gravity.END);
             removeParams.setMargins(0, dp(4), dp(4), 0);
             final int removeIndex = index;
-            remove.setContentDescription("Rimuovi immagine " + (index + 1));
+            remove.setContentDescription("Rimuovi file " + (index + 1));
             remove.setOnClickListener(view -> {
                 selectedFiles.remove(removeIndex);
                 renderSelectedFiles();
@@ -1064,16 +1078,16 @@ public class MainActivity extends Activity {
 
     private void showReviewImagesDialog() {
         if (selectedFiles.isEmpty()) {
-            toast("Nessuna immagine selezionata.");
+            toast("Nessun file selezionato.");
             return;
         }
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(16), dp(8), dp(16), dp(8));
-        content.addView(text("L'ordine delle immagini sarà l'ordine delle pagine inviate all'AI.", 12, MUTED, Typeface.NORMAL));
+        content.addView(text("L'ordine dei file sarà l'ordine delle pagine inviate all'AI. Per i PDF il server mantiene l'ordine delle pagine.", 12, MUTED, Typeface.NORMAL));
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle("Rivedi immagini")
+            .setTitle("Rivedi file")
             .setView(new ScrollView(this) {{ addView(content); }})
             .setNegativeButton("Chiudi", null)
             .create();
@@ -1086,11 +1100,18 @@ public class MainActivity extends Activity {
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(0, dp(8), 0, dp(8));
 
-            ImageView image = new ImageView(this);
-            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            image.setContentDescription("Immagine " + (index + 1));
-            ThumbnailLoader.load(this, part.uri, dp(72), image);
-            row.addView(image, new LinearLayout.LayoutParams(dp(72), dp(72)));
+            if (isPdf(part)) {
+                TextView pdf = text("PDF", 12, DANGER, Typeface.BOLD);
+                pdf.setGravity(Gravity.CENTER);
+                pdf.setBackgroundColor(SURFACE_ALT);
+                row.addView(pdf, new LinearLayout.LayoutParams(dp(72), dp(72)));
+            } else {
+                ImageView image = new ImageView(this);
+                image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                image.setContentDescription("Immagine " + (index + 1));
+                ThumbnailLoader.load(this, part.uri, dp(72), image);
+                row.addView(image, new LinearLayout.LayoutParams(dp(72), dp(72)));
+            }
 
             TextView name = text((index + 1) + ". " + part.fileName, 12, TEXT, Typeface.NORMAL);
             LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -1098,7 +1119,7 @@ public class MainActivity extends Activity {
             row.addView(name, nameParams);
 
             Button up = smallButton("↑");
-            up.setContentDescription("Sposta su immagine " + (index + 1));
+            up.setContentDescription("Sposta su file " + (index + 1));
             up.setEnabled(index > 0);
             up.setOnClickListener(view -> {
                 Collections.swap(selectedFiles, position, position - 1);
@@ -1109,7 +1130,7 @@ public class MainActivity extends Activity {
             row.addView(up);
 
             Button down = smallButton("↓");
-            down.setContentDescription("Sposta giù immagine " + (index + 1));
+            down.setContentDescription("Sposta giù file " + (index + 1));
             down.setEnabled(index < selectedFiles.size() - 1);
             down.setOnClickListener(view -> {
                 Collections.swap(selectedFiles, position, position + 1);
@@ -1120,7 +1141,7 @@ public class MainActivity extends Activity {
             row.addView(down);
 
             Button remove = smallButton("×");
-            remove.setContentDescription("Rimuovi immagine " + (index + 1));
+            remove.setContentDescription("Rimuovi file " + (index + 1));
             remove.setOnClickListener(view -> {
                 selectedFiles.remove(position);
                 renderSelectedFiles();
@@ -1276,7 +1297,7 @@ public class MainActivity extends Activity {
             row.setBackground(background);
             row.addView(text(displayTitle, 13, TEXT, Typeface.BOLD));
             String statusLabel = "pending".equals(status) ? "In attesa di rete/server" : ("uploading".equals(status) ? "Caricamento in corso" : "Fallito");
-            row.addView(text(fileCount + (fileCount == 1 ? " immagine" : " immagini") + " · " + statusLabel, 11, "failed".equals(status) ? DANGER : MUTED, Typeface.NORMAL), matchTop(dp(3)));
+            row.addView(text(fileCount + " file · " + statusLabel, 11, "failed".equals(status) ? DANGER : MUTED, Typeface.NORMAL), matchTop(dp(3)));
             String error = jsonString(item, "error");
             if (!error.isEmpty()) row.addView(text(error, 11, DANGER, Typeface.NORMAL), matchTop(dp(3)));
 
@@ -1412,24 +1433,15 @@ public class MainActivity extends Activity {
     }
 
     private void pickImages() {
-        if (Build.VERSION.SDK_INT >= 33) {
-            try {
-                Intent picker = new Intent(MediaStore.ACTION_PICK_IMAGES);
-                picker.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MAX_SELECTED_IMAGES);
-                startActivityForResult(picker, REQUEST_PICK_IMAGES);
-                return;
-            } catch (ActivityNotFoundException ignored) {
-                // Fallback al selettore documenti.
-            }
-        }
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("image/*");
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "application/pdf"});
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         try {
             startActivityForResult(intent, REQUEST_PICK_IMAGES);
         } catch (ActivityNotFoundException error) {
-            toast("Nessuna app per scegliere immagini disponibile.");
+            toast("Nessuna app per scegliere file disponibile.");
         }
     }
 
@@ -1494,12 +1506,17 @@ public class MainActivity extends Activity {
         for (Uri uri : uris) {
             if (uri == null) continue;
             if (selectedFiles.size() >= MAX_SELECTED_IMAGES) {
-                toast("Puoi caricare al massimo " + MAX_SELECTED_IMAGES + " immagini per volta.");
+                toast("Puoi caricare al massimo " + MAX_SELECTED_IMAGES + " file per volta.");
                 break;
             }
             String mime = resolver.getType(uri);
             String name = ApiClient.displayName(resolver, uri);
-            selectedFiles.add(new UploadPart(uri, mime == null ? "image/jpeg" : mime, name));
+            boolean pdf = "application/pdf".equalsIgnoreCase(mime) || (name != null && name.toLowerCase(Locale.ITALY).endsWith(".pdf"));
+            if (mime != null && !mime.startsWith("image/") && !pdf) {
+                toast("Formato non supportato: " + name);
+                continue;
+            }
+            selectedFiles.add(new UploadPart(uri, pdf ? "application/pdf" : (mime == null ? "image/jpeg" : mime), name));
             added += 1;
         }
         if (added > 0) renderSelectedFiles();
@@ -1530,7 +1547,7 @@ public class MainActivity extends Activity {
 
     private void uploadNotes() {
         if (selectedFiles.isEmpty()) {
-            toast("Seleziona almeno una foto degli appunti.");
+            toast("Seleziona almeno una foto o un PDF degli appunti.");
             return;
         }
         if (!authenticated && passwordRequired) {
@@ -1549,7 +1566,7 @@ public class MainActivity extends Activity {
 
         uploadButton.setEnabled(false);
         uploadProgress.setVisibility(View.VISIBLE);
-        uploadStatus.setText("Ottimizzazione e salvataggio locale di " + files.size() + (files.size() == 1 ? " immagine…" : " immagini…"));
+        uploadStatus.setText("Preparazione e salvataggio locale di " + files.size() + (files.size() == 1 ? " file…" : " file…"));
 
         executor.execute(() -> {
             try {
@@ -1580,9 +1597,9 @@ public class MainActivity extends Activity {
                     titleInput.setText("");
                     tagsInput.setText("");
                     notesInput.setText("");
-                    uploadStatus.setText("Foto salvate nella coda locale. Il caricamento partirà automaticamente appena il server sarà raggiungibile.");
+                    uploadStatus.setText("File salvati nella coda locale. Il caricamento partirà automaticamente appena il server sarà raggiungibile.");
                     refreshQueueStatus();
-                    toast("Foto aggiunte alla coda: verranno caricate appena possibile.");
+                    toast("File aggiunti alla coda: verranno caricati appena possibile.");
                 });
             } catch (Exception error) {
                 runOnUiThread(() -> {
@@ -1726,6 +1743,11 @@ public class MainActivity extends Activity {
                 }
                 content.addView(text("Immagini: " + imageProcessing.length() + " · ritagliate: " + cropped, 11, MUTED, Typeface.NORMAL), matchTop(dp(2)));
             }
+            JSONObject pdfStats = aiInfo.optJSONObject("pdf");
+            if (pdfStats != null && pdfStats.optInt("pdfCount", 0) > 0) {
+                content.addView(text("PDF: " + pdfStats.optInt("pdfCount", 0) + " · " + pdfStats.optInt("totalPages", 0)
+                    + " pagine (" + pdfStats.optInt("textPages", 0) + " testo, " + pdfStats.optInt("renderedPages", 0) + " immagini)", 11, MUTED, Typeface.NORMAL), matchTop(dp(2)));
+            }
         }
 
         String error = jsonString(job, "error");
@@ -1763,7 +1785,7 @@ public class MainActivity extends Activity {
 
         if (multiNote) {
             content.addView(text(generatedNotes.length() + " note separate", 15, TEXT, Typeface.BOLD), matchTop(dp(14)));
-            content.addView(text("Il gruppo di immagini è stato diviso per argomenti. Tutte le note verranno salvate nel vault.", 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+            content.addView(text("Il materiale è stato diviso per argomenti. Tutte le note verranno salvate nel vault.", 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
             for (int i = 0; i < generatedNotes.length(); i++) {
                 JSONObject note = generatedNotes.optJSONObject(i);
                 if (note == null) continue;
@@ -1884,7 +1906,7 @@ public class MainActivity extends Activity {
     private void confirmDeleteActivity(String jobId) {
         new AlertDialog.Builder(this)
             .setTitle("Rimuovere l'attività dalla cronologia?")
-            .setMessage("Se l'attività non è ancora stata salvata, verranno eliminati dal server anche immagine, nota temporanea e dati di elaborazione. Le note e le figure già presenti nel vault Obsidian NON verranno cancellate.")
+            .setMessage("Se l'attività non è ancora stata salvata, verranno eliminati dal server anche i file caricati, la nota temporanea e i dati di elaborazione. Le note e le figure già presenti nel vault Obsidian NON verranno cancellate.")
             .setNegativeButton("Annulla", null)
             .setPositiveButton("Rimuovi", (dialog, which) -> deleteActivity(jobId))
             .show();

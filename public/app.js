@@ -6,6 +6,7 @@ const state = {
   files: [],
   maxFiles: 50,
   maxUploadMb: 20,
+  pdfRecommendedPages: 6,
   authenticated: false
 };
 
@@ -131,8 +132,9 @@ async function loadHealth() {
     const health = await api('/api/health');
     if (Number.isInteger(health.maxFilesPerUpload) && health.maxFilesPerUpload > 0) state.maxFiles = health.maxFilesPerUpload;
     if (Number.isFinite(Number(health.maxUploadMb)) && Number(health.maxUploadMb) > 0) state.maxUploadMb = Number(health.maxUploadMb);
+    if (Number.isFinite(Number(health.pdfRecommendedPagesPerJob)) && Number(health.pdfRecommendedPagesPerJob) > 0) state.pdfRecommendedPages = Number(health.pdfRecommendedPagesPerJob);
     const uploadLimitHint = $('#upload-limit-hint');
-    if (uploadLimitHint) uploadLimitHint.textContent = `Puoi caricare più pagine insieme. Max ${state.maxFiles} file, ${state.maxUploadMb} MB ciascuno.`;
+    if (uploadLimitHint) uploadLimitHint.textContent = `Puoi caricare più pagine insieme. Max ${state.maxFiles} file, ${state.maxUploadMb} MB ciascuno. PDF: consigliate ${state.pdfRecommendedPages} pagine scansionate per volta.`;
     $('#provider-badge').textContent = health.aiProvider === 'mock' ? 'Demo · provider mock' : `AI · ${health.aiProvider}`;
     if (!health.vaultWritable) {
       $('#provider-badge').textContent += ' · vault non scrivibile';
@@ -143,11 +145,17 @@ async function loadHealth() {
   }
 }
 
+function isPdfClientFile(file) {
+  return String(file?.type || '').toLowerCase() === 'application/pdf' || /\.pdf$/i.test(String(file?.name || file?.originalName || ''));
+}
+
 function renderFiles() {
   const list = $('#file-list');
   list.innerHTML = state.files.map((file, index) => {
-    const url = URL.createObjectURL(file);
-    return `<div class="file-chip"><img src="${url}" alt=""><span title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span><button type="button" class="btn btn-ghost" data-remove-file="${index}" aria-label="Rimuovi">×</button></div>`;
+    const preview = isPdfClientFile(file)
+      ? '<span class="file-type-icon">PDF</span>'
+      : `<img src="${URL.createObjectURL(file)}" alt="">`;
+    return `<div class="file-chip">${preview}<span title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span><button type="button" class="btn btn-ghost" data-remove-file="${index}" aria-label="Rimuovi">×</button></div>`;
   }).join('');
   list.querySelectorAll('[data-remove-file]').forEach((button) => {
     button.addEventListener('click', (event) => {
@@ -159,17 +167,17 @@ function renderFiles() {
 }
 
 function addFiles(fileList) {
-  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'application/pdf'];
   let limitReached = false;
   for (const file of fileList) {
-    if (!allowed.includes(file.type) && !/\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name)) continue;
+    if (!allowed.includes(file.type) && !/\.(jpe?g|png|webp|gif|heic|heif|pdf)$/i.test(file.name)) continue;
     if (state.files.length >= state.maxFiles) {
       limitReached = true;
       break;
     }
     state.files.push(file);
   }
-  if (limitReached) showToast(`Puoi caricare al massimo ${state.maxFiles} immagini per volta.`, 'error');
+  if (limitReached) showToast(`Puoi caricare al massimo ${state.maxFiles} file per volta.`, 'error');
   renderFiles();
 }
 
@@ -181,7 +189,7 @@ function jobCard(job) {
       <div class="job-meta">
         <span>${escapeHtml(job.course || 'Corso non indicato')}</span>
         <span>${formatDate(job.lesson_date || job.created_at)}</span>
-        <span>${job.file_count} ${job.file_count === 1 ? 'immagine' : 'immagini'}</span>
+        <span>${job.file_count} ${job.file_count === 1 ? 'file' : 'file'}</span>
       </div>
     </div>
     <div class="job-card-side">
@@ -226,18 +234,24 @@ function renderDialog(job) {
   const aiUsage = aiInfo.usage || null;
   const imageProcessing = Array.isArray(aiInfo.imageProcessing) ? aiInfo.imageProcessing : [];
   const croppedCount = imageProcessing.filter((image) => image?.cropApplied).length;
+  const pdfStats = aiInfo.pdf && aiInfo.pdf.pdfCount > 0 ? aiInfo.pdf : null;
   const usageHtml = aiUsage
     ? `<br><strong>Token AI:</strong> input ${Number(aiUsage.inputTokens) || 0} · output ${Number(aiUsage.outputTokens) || 0}${Number(aiUsage.cachedInputTokens) ? ` · cache ${Number(aiUsage.cachedInputTokens)}` : ''}`
     : '';
   const imageProcessingHtml = imageProcessing.length
     ? `<br><strong>Immagini:</strong> ${imageProcessing.length} · ritagliate ${croppedCount}`
     : '';
+  const pdfStatsHtml = pdfStats
+    ? `<br><strong>PDF:</strong> ${pdfStats.pdfCount} · ${pdfStats.totalPages} pagine (${pdfStats.textPages} testo, ${pdfStats.renderedPages} immagini)`
+    : '';
   const title = result.title || job.requested_title || job.course || 'Appunti';
   $('#dialog-title').textContent = title;
   $('#dialog-status').className = `badge badge-${job.status}`;
   $('#dialog-status').textContent = statusLabels[job.status] || job.status;
 
-  const thumbs = (job.files || []).map((file) => `<a href="${file.url}" target="_blank" rel="noopener"><img src="${file.url}" alt="${escapeHtml(file.originalName)}" loading="lazy"></a>`).join('');
+  const thumbs = (job.files || []).map((file) => isPdfClientFile(file)
+    ? `<a class="pdf-thumb" href="${file.url}" target="_blank" rel="noopener" title="${escapeHtml(file.originalName)}"><span>PDF</span><small>${escapeHtml(file.originalName)}</small></a>`
+    : `<a href="${file.url}" target="_blank" rel="noopener"><img src="${file.url}" alt="${escapeHtml(file.originalName)}" loading="lazy"></a>`).join('');
   const linksHtml = links.length
     ? `<ul class="link-list">${links.map((link) => `<li><span class="wiki-chip ${link.exists ? '' : 'missing'}" title="${escapeHtml(link.reason || '')}">[[${escapeHtml(link.target)}]]${link.exists ? '' : ' · da creare'}</span></li>`).join('')}</ul>`
     : '<p>Nessun wikilink verificato.</p>';
@@ -253,7 +267,7 @@ function renderDialog(job) {
           <p><strong>Corso:</strong> ${escapeHtml(job.course || result.course || '—')}<br>
           <strong>Data:</strong> ${escapeHtml(formatDate(job.lesson_date || result.date))}<br>
           <strong>Tag:</strong> ${escapeHtml((job.user_tags || result.tags || []).join(', ') || '—')}<br>
-          <strong>Confidenza AI:</strong> ${typeof job.confidence === 'number' ? Math.round(job.confidence * 100) + '%' : '—'}${usageHtml}${imageProcessingHtml}</p>
+          <strong>Confidenza AI:</strong> ${typeof job.confidence === 'number' ? Math.round(job.confidence * 100) + '%' : '—'}${usageHtml}${imageProcessingHtml}${pdfStatsHtml}</p>
           ${warningsHtml}
         </div>
         <div class="detail-card">
@@ -266,7 +280,7 @@ function renderDialog(job) {
       ${multiNote ? `
         <div class="detail-card" style="margin-top:18px">
           <h3>${generatedNotes.length} note separate per argomento</h3>
-          <p>UniAi ha diviso il gruppo di immagini in note atomiche. Tutte verranno salvate nel vault.</p>
+          <p>UniAi ha diviso il materiale in note atomiche. Tutte verranno salvate nel vault.</p>
           ${generatedNotes.map((note, index) => `
             <div class="detail-card" style="margin-top:12px">
               <h3>${index + 1}. ${escapeHtml(note.title || 'Nota')}</h3>
@@ -308,7 +322,7 @@ function renderDialog(job) {
     content = `
       <div class="detail-card">
         <h3>Elaborazione in corso</h3>
-        <p>Le immagini sono state salvate sul server. L’AI sta analizzando gli appunti; questa pagina si aggiorna automaticamente.</p>
+        <p>I file sono stati salvati sul server. L’AI sta analizzando gli appunti; questa pagina si aggiorna automaticamente.</p>
         <div class="thumb-grid" style="margin-top:14px">${thumbs}</div>
       </div>`;
   }
@@ -423,7 +437,7 @@ async function retryJob(jobId) {
 $('#upload-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   if (state.files.length === 0) {
-    showToast('Seleziona almeno una foto degli appunti.', 'error');
+    showToast('Seleziona almeno una foto o un PDF degli appunti.', 'error');
     return;
   }
   const form = new FormData(event.currentTarget);

@@ -5,6 +5,7 @@ import { buildFinalMarkdown } from './markdown.js';
 import { selectWikilinks, saveNotesToVault } from './vault.js';
 import { analyzeVaultStructure, matchSubject, suggestedSubjectPath } from './vault-analysis.js';
 import { materializeFiguresForNotes } from './figures.js';
+import { preparePdfInputs } from './pdf.js';
 import { newId, nowIso, uniqueStrings } from './utils.js';
 
 function delay(ms) {
@@ -46,6 +47,7 @@ export function createWorker({ config, store }) {
     try {
       const files = await resolveFiles(job);
       if (files.length === 0) throw new Error('Nessun file associato al job.');
+      const preparedInputs = await preparePdfInputs({ files, config, jobId });
       const vaultAnalysis = analyzeVaultStructure(config.vaultPath, {
         subjectRoots: config.obsidianSubjectRoots
       });
@@ -69,8 +71,11 @@ export function createWorker({ config, store }) {
         },
         vaultNotes,
         vaultAnalysis,
-        matchedSubject
+        matchedSubject,
+        aiFiles: preparedInputs.imageInputs,
+        pdfTextSections: preparedInputs.pdfTextSections
       });
+      aiResult.warnings = uniqueStrings([...(aiResult.warnings || []), ...preparedInputs.warnings]);
 
       const resolvedSubject = matchedSubject || matchSubject(aiResult.subject, vaultAnalysis.subjects);
       const newSubjectPath = suggestedSubjectPath({
@@ -184,7 +189,16 @@ export function createWorker({ config, store }) {
           emergencyUsed: Boolean(aiResult.emergencyUsed),
           usage: aiResult.usage || null,
           imageProcessing: aiResult.imageProcessing || [],
-          analyzedImageIndexes: aiResult.analyzedImageIndexes || []
+          analyzedImageIndexes: aiResult.analyzedImageIndexes || [],
+          pdf: preparedInputs.stats,
+          inputImages: preparedInputs.imageInputs.map((input) => ({
+            relativePath: input.relativePath,
+            originalName: input.originalName,
+            mimeType: input.mimeType,
+            sourceFileIndex: input.sourceFileIndex,
+            inputKind: input.inputKind,
+            pdfPage: input.pdfPage
+          }))
         }
       };
 
@@ -197,6 +211,8 @@ export function createWorker({ config, store }) {
           course: baseCourse,
           subject: baseSubject,
           fileCount: files.length,
+          aiImageCount: preparedInputs.imageInputs.length,
+          pdfPages: preparedInputs.stats.totalPages,
           noteCount: preparedNotes.length,
           ai: resultJson.ai
         }) + '\n');

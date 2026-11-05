@@ -96,16 +96,17 @@ public class UploadJobService extends JobService {
         fields.put("user_notes", item.optString("user_notes", ""));
 
         JSONArray files = item.optJSONArray("files");
-        if (files == null || files.length() == 0) throw new IOException("Nessuna immagine nella coda.");
+        if (files == null || files.length() == 0) throw new IOException("Nessun file nella coda.");
         List<UploadPart> parts = new ArrayList<>();
         for (int i = 0; i < files.length(); i += 1) {
             JSONObject file = files.optJSONObject(i);
             if (file == null) continue;
             File local = new File(file.optString("path"));
-            if (!local.exists()) throw new IOException("Immagine locale mancante: " + local.getName());
-            parts.add(new UploadPart(Uri.fromFile(local), "image/jpeg", file.optString("name", local.getName())));
+            if (!local.exists()) throw new IOException("File locale mancante: " + local.getName());
+            String mimeType = file.optString("mimeType", "image/jpeg");
+            parts.add(new UploadPart(Uri.fromFile(local), mimeType, file.optString("name", local.getName())));
         }
-        if (parts.isEmpty()) throw new IOException("Nessuna immagine valida nella coda.");
+        if (parts.isEmpty()) throw new IOException("Nessun file valido nella coda.");
         return api.upload("/api/uploads", getContentResolver(), fields, parts);
     }
 

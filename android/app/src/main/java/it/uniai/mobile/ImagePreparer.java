@@ -41,8 +41,26 @@ final class ImagePreparer {
 
         for (int index = 0; index < uris.size(); index += 1) {
             Uri uri = uris.get(index);
+            String originalName = displayName(resolver, uri);
+            String mime = resolver.getType(uri);
+            if (isPdf(mime, originalName)) {
+                String base = baseName(originalName, "documento", index);
+                File output = new File(outputDir, String.format(java.util.Locale.ITALY, "%03d-%s.pdf", index + 1, base));
+                try (InputStream input = resolver.openInputStream(uri); FileOutputStream stream = new FileOutputStream(output)) {
+                    if (input == null) throw new IOException("PDF non leggibile.");
+                    byte[] buffer = new byte[8192];
+                    int read;
+                    while ((read = input.read(buffer)) != -1) stream.write(buffer, 0, read);
+                }
+                result.add(new PreparedImage(output, output.getName(), "application/pdf"));
+                continue;
+            }
+
             BitmapFactory.Options bounds = new BitmapFactory.Options();
             bounds.inJustDecodeBounds = true;
+            String base = baseName(originalName, "foto", index);
+            String outputName = String.format(java.util.Locale.ITALY, "%03d-%s.jpg", index + 1, base);
+            File output = new File(outputDir, outputName);
             try (InputStream input = resolver.openInputStream(uri)) {
                 if (input == null) throw new IOException("Immagine non leggibile.");
                 BitmapFactory.decodeStream(input, null, bounds);
@@ -67,10 +85,6 @@ final class ImagePreparer {
             bitmap = orient(bitmap, orientation);
             bitmap = resizeIfNeeded(bitmap, MAX_DIMENSION);
 
-            String originalName = displayName(resolver, uri);
-            String base = originalName.replaceFirst("\\.[A-Za-z0-9]+$", "").replaceAll("[^A-Za-z0-9_-]", "-");
-            if (base.isEmpty()) base = "foto-" + (index + 1);
-            File output = new File(outputDir, String.format(java.util.Locale.ITALY, "%03d-%s.jpg", index + 1, base));
             try (FileOutputStream stream = new FileOutputStream(output)) {
                 if (!bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, stream)) {
                     throw new IOException("Compressione immagine fallita.");
@@ -111,6 +125,16 @@ final class ImagePreparer {
         Bitmap resized = Bitmap.createScaledBitmap(bitmap, Math.round(width * scale), Math.round(height * scale), true);
         if (resized != bitmap) bitmap.recycle();
         return resized;
+    }
+
+    private static boolean isPdf(String mime, String name) {
+        return "application/pdf".equalsIgnoreCase(mime) || (name != null && name.toLowerCase(java.util.Locale.ITALY).endsWith(".pdf"));
+    }
+
+    private static String baseName(String originalName, String fallback, int index) {
+        String base = originalName == null ? "" : originalName.replaceFirst("\\.[A-Za-z0-9]+$", "").replaceAll("[^A-Za-z0-9_-]", "-");
+        if (base.isEmpty()) base = fallback + "-" + (index + 1);
+        return base;
     }
 
     private static String displayName(ContentResolver resolver, Uri uri) {

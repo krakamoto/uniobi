@@ -27,9 +27,9 @@
   <main class="page">
     <section class="hero">
       <div>
-        <p class="eyebrow">Dalle foto alla conoscenza</p>
+        <p class="eyebrow">Dagli appunti alla conoscenza</p>
         <h1>Trasforma gli appunti<br><span class="gradient-text">in note Obsidian collegate.</span></h1>
-        <p class="hero-copy">Carica le foto della lezione. UniAi le archivia sul server, le analizza con un modello visione/OCR e prepara una nota Markdown con frontmatter, tag e wikilink verificati.</p>
+        <p class="hero-copy">Carica foto o PDF della lezione. UniAi li archivia sul server, estrae testo e contenuti visivi, poi prepara una nota Markdown con frontmatter, tag e wikilink verificati.</p>
       </div>
       <div class="hero-stats" aria-label="Flusso di lavoro">
         <div><strong>1</strong><span>Carica</span></div>
@@ -46,15 +46,15 @@
           <p class="eyebrow">Nuova lezione</p>
           <h2 id="upload-title">Carica gli appunti</h2>
         </div>
-        <span class="badge badge-soft">JPG · PNG · WebP · HEIC</span>
+        <span class="badge badge-soft">JPG · PNG · WebP · HEIC · PDF</span>
       </div>
 
       <form id="upload-form">
         <label id="drop-zone" class="drop-zone" for="file-input" tabindex="0">
-          <input id="file-input" name="files" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" multiple hidden>
+          <input id="file-input" name="files" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf,.pdf" multiple hidden>
           <span class="drop-icon" aria-hidden="true">+</span>
-          <strong>Trascina qui le foto o clicca per sceglierle</strong>
-          <span id="upload-limit-hint">Puoi caricare più pagine insieme. Max 50 file, 20 MB ciascuno.</span>
+          <strong>Trascina qui foto o PDF oppure clicca per sceglierli</strong>
+          <span id="upload-limit-hint">Puoi caricare più pagine insieme. Max 50 file, 20 MB ciascuno. PDF: consigliate 4–6 pagine scansionate per volta.</span>
         </label>
         <div id="file-list" class="file-list" aria-live="polite"></div>
 
@@ -81,7 +81,7 @@
             <span class="spinner hidden" aria-hidden="true"></span>
             <span>Carica e analizza</span>
           </button>
-          <span class="hint">Le immagini restano nella cartella upload del server.</span>
+          <span class="hint">Foto e PDF restano nella cartella upload del server fino al salvataggio nel vault.</span>
         </div>
       </form>
     </section>

@@ -2,6 +2,11 @@ FROM node:22-slim
 
 WORKDIR /app
 
+# Poppler serve per estrarre il testo e rasterizzare le pagine dei PDF.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 

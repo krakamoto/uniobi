@@ -471,9 +471,10 @@ ATTENZIONE: questa richiesta contiene UNA SOLA immagine (indice originale ${inde
   }
 }
 
-export async function analyzeImages({ config, files, metadata, vaultNotes, vaultAnalysis, matchedSubject }) {
+export async function analyzeImages({ config, files, aiFiles, pdfTextSections = [], metadata, vaultNotes, vaultAnalysis, matchedSubject }) {
   const budget = { calls: 0, max: Math.max(1, Number(config.aiMaxProviderCallsPerJob) || 10) };
-  const images = await Promise.all(files.map((file) => serializeImage(file, config)));
+  const imageFiles = Array.isArray(aiFiles) ? aiFiles : files;
+  const images = await Promise.all(imageFiles.map((file) => serializeImage(file, config)));
   const existingTitles = vaultNotes
     .map((note) => note.title)
     .filter(Boolean)
@@ -482,7 +483,14 @@ export async function analyzeImages({ config, files, metadata, vaultNotes, vault
     ? buildAiVaultContext(vaultAnalysis, matchedSubject, metadata.course)
     : '';
 
-  const prompt = `Analizza le immagini allegate di appunti universitari e convertile in una nota Markdown per Obsidian.
+  const imageManifest = imageFiles.length
+    ? imageFiles.map((file, index) => `- immagine [${index}]: ${file.displayName || file.originalName || file.relativePath || `allegato ${index + 1}`}${file.pdfPage ? ` (pagina ${file.pdfPage} del PDF)` : ''}`).join('\n')
+    : '- nessuna immagine: il materiale è interamente fornito come testo estratto da PDF.';
+  const pdfTextContext = pdfTextSections.length
+    ? `\nTesti estratti dai PDF (sono già trascritti dal server: usali come fonte e non fare OCR su queste pagine):\n${pdfTextSections.map((section) => `\n--- PDF: ${section.fileName} — pagina ${section.pageNumber}/${section.pageCount} ---\n${section.text}`).join('\n')}`
+    : '';
+
+  const prompt = `Analizza gli allegati di appunti universitari (immagini e/o testo estratto da PDF) e convertili in una nota Markdown per Obsidian.
 
 ${vaultContext}
 
@@ -495,6 +503,10 @@ Metadati forniti dall'utente:
 
 Note già presenti nel vault Obsidian (usa SOLO questi titoli per i wikilink esistenti):
 ${existingTitles.length ? existingTitles.map((title) => `- ${title}`).join('\n') : '- (vault vuoto)'}
+
+Allegati visivi inviati al modello (indici 0-based):
+${imageManifest}
+${pdfTextContext}
 
 Regole precise basate sul vault reale:
 1. Trascrivi fedelmente il contenuto; non inventare informazioni.
@@ -512,8 +524,10 @@ Regole precise basate sul vault reale:
 8b. Per schemi, grafici, tabelle, circuiti o disegni presenti nelle immagini, NON ridisegnarli e NON inventare immagini o URL. Restituisci un array figures con ritaglio dell'immagine originale: id, sourceImageIndex (indice 0-based dell'immagine caricata), bbox normalizzato [x,y,width,height] da 0 a 1, caption e kind. Inserisci nel markdown il placeholder {{id}} nel punto in cui deve comparire la figura. Se non ci sono figure da ritagliare, usa figures: [].
 9. Estrai 3-10 concetti chiave atomici e alcune relazioni concettuali per ogni nota. Usa termini coerenti con la terminologia delle note esistenti.
 10. Non includere frontmatter YAML: il backend lo genera. Il campo markdown deve contenere solo il corpo della nota.
-11. Ogni immagine allegata deve essere analizzata: non omettere nessuna foto. Inserisci nel campo analyzedImageIndexes TUTTI gli indici delle immagini che hai effettivamente letto, usando indici 0-based (la prima immagine è 0, non 1). Se una foto è illeggibile, includila comunque e segnalalo nei warnings.
-12. Restituisci ESCLUSIVAMENTE un oggetto JSON valido, senza testo fuori dal JSON, con questa forma:
+11. Ogni immagine allegata deve essere analizzata: non omettere nessuna foto o pagina PDF rasterizzata. Inserisci nel campo analyzedImageIndexes TUTTI e SOLI gli indici delle immagini visive che hai effettivamente letto, usando indici 0-based (la prima immagine è 0, non 1). Le pagine PDF fornite come testo estratto non hanno un indice immagine e non vanno inserite in analyzedImageIndexes. Se una foto è illeggibile, includila comunque e segnalalo nei warnings.
+12. Se ricevi testo estratto da PDF, usalo per ricostruire fedelmente il contenuto, rispettando l'ordine delle pagine. Non citare i marcatori tecnici "--- PDF: ... ---" nella nota finale.
+13. Se un PDF è composto sia da pagine testuali sia da pagine scansionate, combina le due fonti senza duplicare il contenuto.
+14. Restituisci ESCLUSIVAMENTE un oggetto JSON valido, senza testo fuori dal JSON, con questa forma:
 {
   "course": "Nome corso indicato o dedotto",
   "subject": "Materia esistente o proposta",
@@ -544,7 +558,7 @@ Regole precise basate sul vault reale:
   let primary = null;
   let primaryError = null;
   try {
-    primary = await runProviderResilient({ providerConfig: config, prompt, images, metadata, files, vaultNotes, budget });
+    primary = await runProviderResilient({ providerConfig: config, prompt, images, metadata, files: imageFiles, vaultNotes, budget });
     primary.modelUsed = config.aiModel;
     primary.fallbackUsed = false;
     primary.fallbackAttempted = false;
@@ -568,7 +582,7 @@ Regole precise basate sul vault reale:
     aiBaseUrl: config.aiEmergencyBaseUrl
   };
   const fallbackDecision = primary
-    ? shouldUseAdvancedFallback(primary, files, config)
+    ? shouldUseAdvancedFallback(primary, imageFiles, config)
     : { needed: Boolean(config.aiFallbackEnabled && config.aiFallbackModel), reason: `provider primario fallito: ${primaryError?.message || primaryError}` };
 
   let fallbackError = null;
@@ -579,7 +593,7 @@ Regole precise basate sul vault reale:
         prompt,
         images,
         metadata,
-        files,
+        files: imageFiles,
         vaultNotes,
         budget
       });
@@ -602,7 +616,7 @@ Regole precise basate sul vault reale:
         prompt,
         images,
         metadata,
-        files,
+        files: imageFiles,
         vaultNotes,
         budget
       });

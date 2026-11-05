@@ -48,8 +48,13 @@ function figureEmbed(fileName, caption) {
   return `![${alt}](Allegati/${fileName})${cleanCaption ? `\n*${cleanCaption}*` : ''}`;
 }
 
-export async function materializeFiguresForNotes({ notes, job, config, subjectPath }) {
-  const sourceFiles = (job.source_files || []).map((file) => path.resolve(config.uploadDir, file.relativePath));
+export async function materializeFiguresForNotes({ notes, job, config, subjectPath, aiInputImages = [] }) {
+  const storedInputImages = aiInputImages.length
+    ? aiInputImages
+    : (Array.isArray(job?.result_json?.ai?.inputImages) ? job.result_json.ai.inputImages : []);
+  const sourceFiles = storedInputImages.length
+    ? storedInputImages.map((file) => path.resolve(config.uploadDir, file.relativePath))
+    : (job.source_files || []).map((file) => path.resolve(config.uploadDir, file.relativePath));
   if (!subjectPath) throw new Error('Percorso materia mancante per gli allegati.');
   const attachmentsRelative = path.posix.join(subjectPath, config.obsidianSubjectAttachmentsSubdir);
   const attachmentsDir = path.resolve(config.vaultPath, attachmentsRelative);

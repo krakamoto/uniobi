@@ -41,6 +41,13 @@ export function loadConfig(env = process.env, root = process.cwd()) {
   }
   const imageMaxSide = Math.max(512, number(env.IMAGE_MAX_SIDE, 1600));
   const imageJpegQuality = Math.max(40, Math.min(100, number(env.IMAGE_JPEG_QUALITY, 88)));
+  const pdfMaxPagesPerFile = Math.max(1, Math.floor(number(env.PDF_MAX_PAGES_PER_FILE, 30)));
+  const pdfMaxPagesPerJob = Math.max(1, Math.floor(number(env.PDF_MAX_PAGES_PER_JOB, 24)));
+  const pdfRecommendedPagesPerJob = Math.max(1, Math.floor(number(env.PDF_RECOMMENDED_PAGES_PER_JOB, 6)));
+  const pdfTextPageMinChars = Math.max(20, Math.floor(number(env.PDF_TEXT_PAGE_MIN_CHARS, 80)));
+  const pdfMaxTextCharsPerJob = Math.max(1000, Math.floor(number(env.PDF_MAX_TEXT_CHARS_PER_JOB, 120000)));
+  const pdfRenderMaxSide = Math.max(512, Math.min(4096, number(env.PDF_RENDER_MAX_SIDE, imageMaxSide)));
+  const maxAiImagesPerJob = Math.max(1, Math.floor(number(env.AI_MAX_IMAGES_PER_JOB, 50)));
   const imageCropEnabled = bool(env.IMAGE_CROP_ENABLED, true);
   const imageCropAnalysisSide = Math.max(256, Math.min(1200, number(env.IMAGE_CROP_ANALYSIS_SIDE, 640)));
   const imageCropThreshold = Math.max(8, Math.min(80, number(env.IMAGE_CROP_THRESHOLD, 24)));
@@ -87,6 +94,14 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     maxFilesPerUpload: Math.max(1, Math.floor(number(env.MAX_FILES_PER_UPLOAD, 50))),
     imageMaxSide,
     imageJpegQuality,
+    pdfMaxPagesPerFile,
+    pdfMaxPagesPerJob,
+    pdfRecommendedPagesPerJob,
+    pdfTextExtractionEnabled: bool(env.PDF_TEXT_EXTRACTION_ENABLED, true),
+    pdfTextPageMinChars,
+    pdfMaxTextCharsPerJob,
+    pdfRenderMaxSide,
+    maxAiImagesPerJob,
     imageCropEnabled,
     imageCropAnalysisSide,
     imageCropThreshold,

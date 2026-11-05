@@ -18,6 +18,8 @@ const PNG_1X1 = Buffer.from(
   'base64'
 );
 
+const PDF_2_PAGES = Buffer.from('JVBERi0xLjcKJcfsj6IKJSVJbnZvY2F0aW9uOiBncyAtcSAtZE5PUEFVU0UgLWRCQVRDSCAtc0RFVklDRT1wZGZ3cml0ZSAtc091dHB1dEZpbGU9PyA/CjUgMCBvYmoKPDwvTGVuZ3RoIDYgMCBSL0ZpbHRlciAvRmxhdGVEZWNvZGU+PgpzdHJlYW0KeJwtizEOwjAUQ/d/Cm+0CyRVpe5IbAwU5QI/IVRBNGlDysDp+dDKli092TPUXkP9tLUbSWGgmfSfYis34mjocO3QtDB3WscaXSNWMCNVFx5CZCwx4RYw5fRmuBRR/KskSGQONjx9bR7UyuVMVb8IZkzrU8Yl+OjB1rLw+BHGmUvxOdQ7OhnqRV+v+zIjZW5kc3RyZWFtCmVuZG9iago2IDAgb2JqCjE0MQplbmRvYmoKMTAgMCBvYmoKPDwvTGVuZ3RoIDExIDAgUi9GaWx0ZXIgL0ZsYXRlRGVjb2RlPj4Kc3RyZWFtCnicLYu9DsIwEIP3ewpvtAukVaXOILExAMoLHOlRgtKkPykDT09Kq8+SLcseoPYF1MLmpiOFlgYq/i02Mx1Omg73GmUF/aR1XKAukxR0R9mVW+sZzSxoLPoxfBgmeLCLY0CUKYZcv6lK6wtlR29egmFONaNfr8uxtZGdpDiJk68Nnh/WSb6js6Zb4gcZMTCUZW5kc3RyZWFtCmVuZG9iagoxMSAwIG9iagoxNDMKZW5kb2JqCjQgMCBvYmoKPDwvVHlwZS9QYWdlL01lZGlhQm94IFswIDAgNTk1IDg0Ml0KL1JvdGF0ZSAwL1BhcmVudCAzIDAgUgovUmVzb3VyY2VzPDwvUHJvY1NldFsvUERGIC9UZXh0XQovRm9udCA4IDAgUgo+PgovQ29udGVudHMgNSAwIFIKPj4KZW5kb2JqCjkgMCBvYmoKPDwvVHlwZS9QYWdlL01lZGlhQm94IFswIDAgNTk1IDg0Ml0KL1JvdGF0ZSAwL1BhcmVudCAzIDAgUgovUmVzb3VyY2VzPDwvUHJvY1NldFsvUERGIC9UZXh0XQovRm9udCAxMiAwIFIKPj4KL0NvbnRlbnRzIDEwIDAgUgo+PgplbmRvYmoKMyAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWwo0IDAgUgo5IDAgUgpdIC9Db3VudCAyCj4+CmVuZG9iagoxIDAgb2JqCjw8L1R5cGUgL0NhdGFsb2cgL1BhZ2VzIDMgMCBSCi9NZXRhZGF0YSAxMyAwIFIKPj4KZW5kb2JqCjggMCBvYmoKPDwvUjcKNyAwIFI+PgplbmRvYmoKMTIgMCBvYmoKPDwvUjcKNyAwIFI+PgplbmRvYmoKNyAwIG9iago8PC9CYXNlRm9udC9IZWx2ZXRpY2EvVHlwZS9Gb250Ci9TdWJ0eXBlL1R5cGUxPj4KZW5kb2JqCjEzIDAgb2JqCjw8L1R5cGUvTWV0YWRhdGEKL1N1YnR5cGUvWE1ML0xlbmd0aCAxMTgzPj5zdHJlYW0KPD94cGFja2V0IGJlZ2luPSfvu78nIGlkPSdXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQnPz4KPD9hZG9iZS14YXAtZmlsdGVycyBlc2M9IkNSTEYiPz4KPHg6eG1wbWV0YSB4bWxuczp4PSdhZG9iZTpuczptZXRhLycgeDp4bXB0az0nWE1QIHRvb2xraXQgMi45LjEtMTMsIGZyYW1ld29yayAxLjYnPgo8cmRmOlJERiB4bWxuczpyZGY9J2h0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMnIHhtbG5zOmlYPSdodHRwOi8vbnMuYWRvYmUuY29tL2lYLzEuMC8nPgo8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczpwZGY9J2h0dHA6Ly9ucy5hZG9iZS5jb20vcGRmLzEuMy8nIHBkZjpQcm9kdWNlcj0nR1BMIEdob3N0c2NyaXB0IDEwLjAwLjAnLz4KPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSdodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvJz48eG1wOk1vZGlmeURhdGU+MjAyNi0xMS0wNVQxMDowMjoxMyswMTowMDwveG1wOk1vZGlmeURhdGU+Cjx4bXA6Q3JlYXRlRGF0ZT4yMDI2LTExLTA1VDEwOjAyOjEzKzAxOjAwPC94bXA6Q3JlYXRlRGF0ZT4KPHhtcDpDcmVhdG9yVG9vbD5Vbmtub3duQXBwbGljYXRpb248L3htcDpDcmVhdG9yVG9vbD48L3JkZjpEZXNjcmlwdGlvbj4KPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eGFwTU09J2h0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8nIHhhcE1NOkRvY3VtZW50SUQ9J3V1aWQ6MjQxMjkxODUtMTExNC0xMWZkLTAwMDAtY2M4MzZkOGVmZGEyJy8+CjxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSIiIHhtbG5zOmRjPSdodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLycgZGM6Zm9ybWF0PSdhcHBsaWNhdGlvbi9wZGYnPjxkYzp0aXRsZT48cmRmOkFsdD48cmRmOmxpIHhtbDpsYW5nPSd4LWRlZmF1bHQnPlVudGl0bGVkPC9yZGY6bGk+PC9yZGY6QWx0PjwvZGM6dGl0bGU+PC9yZGY6RGVzY3JpcHRpb24+CjwvcmRmOlJERj4KPC94OnhtcG1ldGE+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKPD94cGFja2V0IGVuZD0ndyc/PgplbmRzdHJlYW0KZW5kb2JqCjIgMCBvYmoKPDwvUHJvZHVjZXIoR1BMIEdob3N0c2NyaXB0IDEwLjAwLjApCi9DcmVhdGlvbkRhdGUoRDoyMDI2MTEwNTEwMDIxMyswMScwMCcpCi9Nb2REYXRlKEQ6MjAyNjExMDUxMDAyMTMrMDEnMDAnKT4+ZW5kb2JqCnhyZWYKMCAxNAowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDA5MDIgMDAwMDAgbiAKMDAwMDAwMjM1MCAwMDAwMCBuIAowMDAwMDAwODM3IDAwMDAwIG4gCjAwMDAwMDA1NTMgMDAwMDAgbiAKMDAwMDAwMDA4OCAwMDAwMCBuIAowMDAwMDAwMjk5IDAwMDAwIG4gCjAwMDAwMDEwMjYgMDAwMDAgbiAKMDAwMDAwMDk2NyAwMDAwMCBuIAowMDAwMDAwNjk0IDAwMDAwIG4gCjAwMDAwMDAzMTggMDAwMDAgbiAKMDAwMDAwMDUzMyAwMDAwMCBuIAowMDAwMDAwOTk2IDAwMDAwIG4gCjAwMDAwMDEwOTAgMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSAxNCAvUm9vdCAxIDAgUiAvSW5mbyAyIDAgUgovSUQgWzwxQjIwRTNGMzA3NTk4QzMyMDQ2RTdCNjc3QUZCMTE3NT48MUIyMEUzRjMwNzU5OEMzMjA0NkU3QjY3N0FGQjExNzU+XQo+PgpzdGFydHhyZWYKMjQ3NgolJUVPRgo=', 'base64');
+
 function isInside(parent, child) {
   return isPathInside(parent, child);
 }
@@ -253,6 +255,65 @@ test('upload accetta più di 10 immagini in un singolo job', async (t) => {
   assert.equal(healthResponse.status, 200);
   const healthPayload = await healthResponse.json();
   assert.equal(healthPayload.maxFilesPerUpload, 50);
+});
+
+
+test('upload PDF: estrae il testo e completa il job senza rasterizzare pagine digitali', async (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-pdf-'));
+  const uploadDir = path.join(root, 'uploads');
+  const vaultPath = path.join(root, 'vault');
+  const databasePath = path.join(root, 'uniai.db');
+  mkdirSync(uploadDir, { recursive: true });
+  mkdirSync(vaultPath, { recursive: true });
+
+  const config = loadConfig({
+    ...process.env,
+    APP_PASSWORD: '',
+    DATABASE_URL: databasePath,
+    UPLOAD_DIR: uploadDir,
+    OBSIDIAN_VAULT_PATH: vaultPath,
+    AI_PROVIDER: 'mock',
+    AUTO_SAVE_TO_VAULT: 'false',
+    WORKER_POLL_MS: '0',
+    PDF_TEXT_EXTRACTION_ENABLED: 'true',
+    PDF_TEXT_PAGE_MIN_CHARS: '10'
+  }, root);
+
+  const store = createStore(config.databasePath);
+  const worker = createWorker({ config, store });
+  const app = createApp({ config, store, worker });
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  const { port } = server.address();
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  t.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    await worker.waitForIdle();
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const form = new FormData();
+  form.append('files', new Blob([PDF_2_PAGES], { type: 'application/pdf' }), 'appunti.pdf');
+  form.append('course', 'Analisi Matematica II');
+
+  const uploadResponse = await fetch(`${baseUrl}/api/uploads`, { method: 'POST', body: form });
+  assert.equal(uploadResponse.status, 202);
+  const uploadPayload = await uploadResponse.json();
+  const jobId = uploadPayload.job.id;
+
+  await worker.waitForIdle();
+  const detailResponse = await fetch(`${baseUrl}/api/jobs/${jobId}`);
+  assert.equal(detailResponse.status, 200);
+  const detailPayload = await detailResponse.json();
+  assert.equal(detailPayload.job.status, 'completed');
+  assert.equal(detailPayload.job.files.length, 1);
+  assert.equal(detailPayload.job.result_json.ai.pdf.pdfCount, 1);
+  assert.equal(detailPayload.job.result_json.ai.pdf.totalPages, 2);
+  assert.equal(detailPayload.job.result_json.ai.pdf.textPages, 2);
+  assert.equal(detailPayload.job.result_json.ai.pdf.renderedPages, 0);
+  assert.equal(detailPayload.job.result_json.ai.inputImages.length, 0);
 });
 
 test('scanVault legge titoli e alias dalle note esistenti', () => {
