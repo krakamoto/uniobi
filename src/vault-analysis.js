@@ -340,8 +340,15 @@ function folderLabel(relativePath) {
   return folder === '.' ? 'Radice' : folder.split('/').join(' / ');
 }
 
-function indexRowsForNotes(subject) {
+function indexRowsForNotes(subject, analysis) {
   const groups = new Map();
+  const basenameCounts = new Map();
+  for (const item of analysis.subjects) {
+    for (const note of item.notes) {
+      const key = note.basename.toLocaleLowerCase('it');
+      basenameCounts.set(key, (basenameCounts.get(key) || 0) + 1);
+    }
+  }
   for (const note of subject.notes) {
     const label = folderLabel(relativeToSubject(note, subject));
     if (!groups.has(label)) groups.set(label, []);
@@ -353,7 +360,10 @@ function indexRowsForNotes(subject) {
       .sort((a, b) => a.basename.localeCompare(b.basename, 'it', { numeric: true }))
       .map((note) => {
         const display = note.title.replace(/\|/g, '—');
-        const target = note.relativePath.replace(/\.md$/i, '').replace(/\|/g, '—');
+        const basenameKey = note.basename.toLocaleLowerCase('it');
+        const target = basenameCounts.get(basenameKey) === 1
+          ? note.basename.replace(/\|/g, '—')
+          : note.relativePath.replace(/\.md$/i, '').replace(/\|/g, '—');
         const summary = note.summary ? ` — ${note.summary}` : '';
         return `- [[${target}|${display}]]${summary}`;
       });
@@ -382,7 +392,7 @@ ${tags.map((tag) => `  - "${tag}"`).join('\n')}
 
 ## Note per cartella
 
-${indexRowsForNotes(subject)}
+${indexRowsForNotes(subject, analysis)}
 
 ## Convenzioni della materia
 

@@ -34,7 +34,7 @@ test('analisi del vault: riconosce materie e genera gli indici', () => {
     const rebuilt = rebuildAllVaultArtifacts(root, { subjectRoots: ['uni/Uni/triennale'] });
     assert.equal(rebuilt.results.length, 1);
     const index = readFileSync(path.join(subjectDir, '_Indice.md'), 'utf8');
-    assert.match(index, /\[\[uni\/Uni\/triennale\/analisi matematica\/00 limiti\|Limiti\]\]/);
+    assert.match(index, /\[\[00 limiti\|Limiti\]\]/);
     assert.equal(existsSync(path.join(subjectDir, '_Mappa concettuale.md')), false);
     assert.equal(existsSync(path.join(subjectDir, '_Mappa concettuale.canvas')), false);
 

@@ -4,7 +4,8 @@
 
 - Gli indici ignorano i duplicati senza numero quando esiste la nota numerata.
 - Eliminate 57 voci duplicate dagli indici.
-- Ogni link degli indici punta a un file Markdown reale tramite percorso relativo completo.
+- Gli indici usano wikilink con il solo nome file quando univoco, compatibili con Obsidian anche se il vault è aperto da una sottocartella.
+- I percorsi completi restano solo per i rari nomi duplicati.
 
 ## Wikilink numerati tra note — 2026-11-05
 
