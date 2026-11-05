@@ -97,12 +97,83 @@ export function findVaultNote(target, notes) {
   const cleanTarget = String(target || '').trim().replace(/^\[\[|\]\]$/g, '').split('|')[0].split('#')[0].trim();
   if (!cleanTarget) return null;
   const normalized = normalizeTitle(cleanTarget);
+  const targetLeaf = cleanTarget.split('/').pop();
+  if (!/^\d{2,5}\s+/.test(targetLeaf)) {
+    const leafKey = normalizeTitle(targetLeaf);
+    const numbered = notes.filter((note) => /^\d{2,5}\s+/.test(note.title)
+      && normalizeTitle(note.title.replace(/^\d{2,5}\s+/, '')) === leafKey);
+    if (numbered.length > 0) {
+      if (cleanTarget.includes('/')) {
+        const targetDir = normalizeTitle(cleanTarget.slice(0, cleanTarget.lastIndexOf('/')));
+        const sameDir = numbered.filter((note) => normalizeTitle(path.posix.dirname(note.relativePath)) === targetDir);
+        if (sameDir.length > 0) return sameDir[0];
+      }
+      return numbered[0];
+    }
+  }
   for (const note of notes) {
+
     if (normalizeTitle(note.title) === normalized) return note;
     if (note.aliases.some((alias) => normalizeTitle(alias) === normalized)) return note;
     if (normalizeTitle(note.relativePath.replace(/\.md$/i, '')) === normalized) return note;
   }
+  // Le note salvate hanno il numero nel nome file, mentre i link generati
+  // possono usare il solo titolo senza prefisso.
+  const titleMatches = notes.filter((note) => normalizeTitle(note.title.replace(/^\d{2,5}\s+/, '')) === normalized);
+  if (titleMatches.length === 1) return titleMatches[0];
   return null;
+}
+
+export function normalizeVaultWikilinks({ vaultPath, dryRun = true }) {
+  const notes = scanVault(vaultPath, '');
+  const changes = [];
+  for (const note of notes) {
+    const absolute = path.join(vaultPath, note.relativePath);
+    const original = readFileSync(absolute, 'utf8');
+    let rewritten = 0;
+    let staleWarningsRemoved = 0;
+    let updated = original.replace(/(?<!!)\[\[([^\]|#]+)(#[^\]|]+)?(\|[^\]]+)?\]\]/g, (full, rawTarget, heading, label) => {
+      const target = String(rawTarget || '').trim();
+      if (!target) return full;
+      const targetLeaf = target.split('/').pop();
+      if (/^\d{2,5}\s+/.test(targetLeaf)) return full;
+      const resolved = findVaultNote(target, notes);
+      if (!resolved || resolved.title === target) return full;
+      rewritten += 1;
+      return `[[${resolved.title}${heading || ''}${label || ''}]]`;
+    });
+    updated = updated.split('\n').filter((line) => {
+      const match = line.match(/^> - Il wikilink \[\[([^\]]+)\]\] non esiste nel vault ed è stato convertito in testo\.\s*$/);
+      if (!match) return true;
+      if (!findVaultNote(match[1], notes)) return true;
+      staleWarningsRemoved += 1;
+      return false;
+    }).join('\n');
+    if (staleWarningsRemoved > 0) {
+      updated = updated.replace(/\n*> \[!warning\] Da verificare\n(?=\n|$)/g, '');
+    }
+    if (rewritten > 0 || staleWarningsRemoved > 0) {
+      changes.push({ relativePath: note.relativePath, rewritten, staleWarningsRemoved, markdown: updated });
+    }
+  }
+  if (!dryRun) {
+    for (const change of changes) {
+      const absolute = path.join(vaultPath, change.relativePath);
+      const temporary = `${absolute}.uniai-link-normalize-tmp`;
+      writeFileSync(temporary, change.markdown, 'utf8');
+      renameSync(temporary, absolute);
+    }
+  }
+  return {
+    changedFiles: changes.length,
+    rewrittenLinks: changes.reduce((total, change) => total + change.rewritten, 0),
+    staleWarningsRemoved: changes.reduce((total, change) => total + (change.staleWarningsRemoved || 0), 0),
+    changes: changes.map((change) => ({
+      relativePath: change.relativePath,
+      rewritten: change.rewritten,
+      staleWarningsRemoved: change.staleWarningsRemoved || 0
+    }))
+  };
 }
 
 function extractWikiTargets(markdown) {
@@ -243,6 +314,11 @@ export function saveNotesToVault({ vaultPath, notesSubdir, relativeDir, notes, j
     idGenerator
   }));
   rebuildAfterSave(vaultPath, saved, subjectRoots);
+  try {
+    normalizeVaultWikilinks({ vaultPath, dryRun: false });
+  } catch (error) {
+    console.error(`[vault] Impossibile normalizzare i wikilink: ${error.message}`);
+  }
   return saved;
 }
 

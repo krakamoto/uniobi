@@ -341,6 +341,29 @@ Per minimizzare i token:
 
 I token effettivi vengono registrati per ogni job in `data/ai-usage.jsonl` e mostrati nel dettaglio dell’attività.
 
+## Normalizzazione dei wikilink
+
+I wikilink generati devono usare il nome file completo, incluso il prefisso numerico:
+
+```markdown
+[[013 Conversione geodetica in coordinate geocentriche equatoriali con latitudine ridotta]]
+```
+
+Comandi:
+
+```bash
+npm run vault:check-unumbered-links  # controllo senza modifiche
+npm run vault:normalize-links        # normalizza collegamenti e indici
+```
+
+La normalizzazione:
+
+- risolve i link usando titolo, alias o titolo senza numero;
+- preferisce la nota numerata quando esiste un vecchio duplicato senza numero;
+- aggiorna i link tra note create nello stesso caricamento;
+- rimuove gli avvisi obsoleti del tipo “il wikilink non esiste” quando la nota ora esiste;
+- ricostruisce gli indici.
+
 ## Rinumerazione delle note
 
 Le note generate da UniAi possono essere rinumerate senza buchi:

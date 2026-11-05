@@ -1,5 +1,13 @@
 # Changelog
 
+## Wikilink numerati tra note — 2026-11-05
+
+- I nuovi link tra note dello stesso caricamento vengono normalizzati dopo l'assegnazione dei numeri.
+- `findVaultNote` preferisce la versione numerata quando esistono duplicati senza numero.
+- Aggiunto `vault:normalize-links` e `vault:check-unumbered-links`.
+- Rimossi avvisi obsoleti su wikilink che ora esistono.
+- Aggiunti collegamenti curati nelle note di spaceflight in magistrale.
+
 ## Rinumerazione note — 2026-11-05
 
 - Aggiunto `vault:renumber` per verificare i buchi di numerazione.

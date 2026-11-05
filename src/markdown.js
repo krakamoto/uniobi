@@ -1,4 +1,5 @@
 import { uniqueStrings } from './utils.js';
+import { findVaultNote } from './vault.js';
 
 function yamlString(value) {
   return JSON.stringify(String(value ?? ''));
@@ -44,7 +45,7 @@ export function ensureHeading(markdown, title) {
   return `# ${title}\n\n${body}`;
 }
 
-function sanitizeWikilinks(markdown, links, allowCreate) {
+function sanitizeWikilinks(markdown, links, allowCreate, notes = []) {
   const warnings = [];
   const validTargets = new Set();
   for (const link of links) {
@@ -55,6 +56,12 @@ function sanitizeWikilinks(markdown, links, allowCreate) {
   const sanitized = String(markdown || '').replace(/\[\[([^\]|#]+)(#[^\]|]+)?(?:\|([^\]]+))?\]\]/g, (full, target, section, label) => {
     const cleanTarget = String(target).trim();
     const key = cleanTarget.toLocaleLowerCase('it');
+    const resolved = findVaultNote(cleanTarget, notes);
+    if (resolved) {
+      const numbered = resolved.title;
+      if (numbered !== cleanTarget) return `[[${numbered}${section || ''}${label || ''}]]`;
+      return full;
+    }
     const exists = validTargets.has(key);
     if (exists || allowCreate) return full;
     warnings.push(`Il wikilink [[${cleanTarget}]] non esiste nel vault ed è stato convertito in testo.`);
@@ -119,7 +126,7 @@ export function buildFinalMarkdown({ aiResult, metadata, links, warnings, create
   const tags = uniqueStrings([...(metadata.tags || []), ...(aiResult.tags || [])]);
   let body = ensureHeading(aiResult.markdown || aiResult.content || metadata.fallbackContent || '', title);
 
-  const sanitized = sanitizeWikilinks(body, links, allowCreate);
+  const sanitized = sanitizeWikilinks(body, links, allowCreate, notes);
   body = sanitized.markdown;
   body = appendKeyConcepts(body, aiResult.keyConcepts || [], aiResult.conceptRelations || []);
   body = appendVerifiedLinks(body, links);

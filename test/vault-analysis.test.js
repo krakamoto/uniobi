@@ -10,7 +10,7 @@ import {
   rebuildAllVaultArtifacts,
   rebuildArtifactsForFile
 } from '../src/vault-analysis.js';
-import { safeVaultDestination, saveNoteToVault, saveNotesToVault } from '../src/vault.js';
+import { findVaultNote, safeVaultDestination, saveNoteToVault, saveNotesToVault, scanVault } from '../src/vault.js';
 import { validateLatexDelimiters } from '../src/markdown.js';
 
 test('analisi del vault: riconosce materie e genera gli indici', () => {
@@ -130,18 +130,36 @@ test('un job può salvare più note numerate e aggiornare un solo indice', () =>
       notesSubdir: 'Università/Lezioni',
       relativeDir: 'uni/Uni/magistrale/controlli',
       notes: [
-        { title: 'Funzione di trasferimento', date: '2025-10-31', markdown: '# Funzione di trasferimento\n' },
+        { title: 'Funzione di trasferimento', date: '2025-10-31', markdown: '# Funzione di trasferimento\n\nVedi [[Risposta in frequenza]].\n' },
         { title: 'Risposta in frequenza', date: '2025-10-31', markdown: '# Risposta in frequenza\n' }
       ],
       subjectRoots: ['uni/Uni/magistrale']
     });
     assert.equal(saved.length, 2);
+    const firstNote = readFileSync(saved[0].absolutePath, 'utf8');
+    assert.match(firstNote, /\[\[002 Risposta in frequenza\]\]/);
     assert.match(path.basename(saved[0].relativePath), /^001 Funzione di trasferimento\.md$/);
     assert.match(path.basename(saved[1].relativePath), /^002 Risposta in frequenza\.md$/);
     const index = readFileSync(path.join(subjectDir, '_Indice.md'), 'utf8');
     assert.match(index, /001 Funzione di trasferimento/);
     assert.match(index, /002 Risposta in frequenza/);
     assert.equal(existsSync(path.join(subjectDir, '_Mappa concettuale.md')), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test('findVaultNote preferisce la versione numerata quando esiste un duplicato senza numero', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-note-preference-'));
+  try {
+    const dir = path.join(root, 'Materia');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, '01 Carica.md'), '# Carica numerata\n');
+    writeFileSync(path.join(dir, 'Carica.md'), '# Carica senza numero\n');
+    const notes = scanVault(root, '');
+    const resolved = findVaultNote('Carica', notes);
+    assert.equal(resolved.title, '01 Carica');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
