@@ -1,5 +1,13 @@
 # Changelog
 
+## Figure dai PDF — 2026-11-05
+
+- Le pagine PDF testuali con immagini o riferimenti a figure vengono rasterizzate.
+- Le figure possono essere ritagliate e salvate in `Allegati/` come per le foto.
+- Aggiunto `PDF_RENDER_FIGURE_PAGES` e `PDF_FIGURE_RENDER_MAX_SIDE`.
+- Statistiche PDF con numero di pagine figura.
+- Versione Android 2.9.2.
+
 ## Fix selezione PDF Android — 2026-11-05
 
 - Risolto conflitto tra `REQUEST_PICK_PDF` e `REQUEST_CAMERA`.

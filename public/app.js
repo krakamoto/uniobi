@@ -246,7 +246,7 @@ function renderDialog(job) {
     ? `<br><strong>Immagini:</strong> ${imageProcessing.length} · ritagliate ${croppedCount}`
     : '';
   const pdfStatsHtml = pdfStats
-    ? `<br><strong>PDF:</strong> ${pdfStats.pdfCount} · ${pdfStats.totalPages} pagine · ${pdfStats.analysisParts || 0} parti (${pdfStats.textPages} testo, ${pdfStats.renderedPages} immagini)`
+    ? `<br><strong>PDF:</strong> ${pdfStats.pdfCount} · ${pdfStats.totalPages} pagine · ${pdfStats.analysisParts || 0} parti (${pdfStats.textPages} testo, ${pdfStats.renderedPages} immagini, ${pdfStats.figurePages || 0} figure)`
     : '';
   const title = result.title || job.requested_title || job.course || 'Appunti';
   $('#dialog-title').textContent = title;

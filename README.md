@@ -206,6 +206,8 @@ Tutte le variabili sono documentate in `.env.example`:
 | `PDF_PAGES_PER_ANALYSIS` | `6` | Pagine PDF massime per singola chiamata AI |
 | `PDF_MAX_ANALYSIS_PARTS` | `10` | Numero massimo di parti AI per PDF |
 | `PDF_RENDER_MAX_SIDE` | `1600` | Lato massimo delle pagine PDF rasterizzate |
+| `PDF_RENDER_FIGURE_PAGES` | `true` | Rasterizza le pagine testuali che contengono immagini o riferimenti a figure |
+| `PDF_FIGURE_RENDER_MAX_SIDE` | `1400` | Lato massimo delle pagine rasterizzate per il ritaglio figure |
 | `AI_MAX_IMAGES_PER_JOB` | `50` | Tetto immagini visive (foto + pagine PDF rasterizzate) |
 | `OBSIDIAN_VAULT_PATH` | `./obsidian-vault` | Percorso del vault Obsidian |
 | `OBSIDIAN_NOTES_SUBDIR` | `Università/Lezioni` | Sottocartella di destinazione per materie non riconosciute |
@@ -310,6 +312,7 @@ Il server tratta i PDF in modo ibrido e li divide automaticamente in parti da ma
 1. prova a estrarre il testo con `pdftotext`;
 2. se una pagina contiene testo sufficiente, la invia al modello come testo (molto meno costoso di un’immagine);
 3. se la pagina è scansionata, vuota o prevalentemente grafica, la rasterizza con `pdftoppm` a un massimo di 1600 px e la invia come immagine;
+3b. se una pagina digitale contiene immagini incorporate o riferimenti a figure, invia anche una versione raster della pagina per consentire all’AI di restituire bbox e ritagliare le figure;
 4. conserva l’ordine delle pagine e usa lo stesso indice immagine per l’eventuale ritaglio delle figure.
 
 Configurazione consigliata:
@@ -324,13 +327,15 @@ PDF_RECOMMENDED_PAGES_PER_JOB=6
 PDF_PAGES_PER_ANALYSIS=6
 PDF_MAX_ANALYSIS_PARTS=10
 PDF_RENDER_MAX_SIDE=1600
+PDF_RENDER_FIGURE_PAGES=true
+PDF_FIGURE_RENDER_MAX_SIDE=1400
 AI_MAX_IMAGES_PER_JOB=50
 ```
 
 Per minimizzare i token:
 
-- **PDF digitale con testo selezionabile:** 8–12 pagine per caricamento sono ragionevoli; il costo dominante diventa il testo, non le immagini.
-- **PDF scansionato o fatto di foto:** meglio **4–6 pagine per caricamento**. Ogni pagina visiva consuma tipicamente qualche migliaio di token e gruppi troppo grandi aumentano anche il rischio di output troncato e fallback costosi.
+- **PDF digitale con testo selezionabile:** le pagine con immagini incorporate o riferimenti a figure vengono rasterizzate anche se contengono testo, così le figure possono essere ritagliate e inserite in `Allegati/`. Il costo dominante resta il testo.
+- **PDF scansionato o fatto di foto:** il server li divide in parti da massimo 6 pagine. Ogni pagina visiva consuma tipicamente qualche migliaio di token.
 - Per lezioni molto lunghe conviene creare più attività e poi unire/collegare le note in Obsidian.
 - Il limite massimo predefinito è 60 pagine PDF per job, ma le pagine vengono analizzate in parti separate da massimo 6.
 

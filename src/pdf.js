@@ -88,6 +88,24 @@ function meaningfulTextLength(text) {
   return String(text || '').replace(/\s+/g, ' ').trim().length;
 }
 
+function figurePageHeuristic(text) {
+  return /(figura|fig\.|schema|diagramma|grafico|tabella|circuito|immagine|foto)/i.test(String(text || ''));
+}
+
+async function detectEmbeddedImagePages(absolutePath) {
+  try {
+    const { stdout } = await runPdfCommand('pdfimages', ['-list', absolutePath], { timeout: 60000, maxBuffer: 8 * 1024 * 1024 });
+    const pages = new Set();
+    for (const line of String(stdout || '').split('\n')) {
+      const match = line.match(/^\s*(\d+)\s+\d+\s+/);
+      if (match) pages.add(Number(match[1]));
+    }
+    return pages;
+  } catch {
+    return new Set();
+  }
+}
+
 export async function validatePdfUploads(files, config) {
   const pdfFiles = (files || []).filter(isPdfFile);
   if (pdfFiles.length === 0) return { pdfCount: 0, totalPages: 0, files: [] };
@@ -120,6 +138,8 @@ export async function preparePdfInputs({ files, config, jobId }) {
   const maxAnalysisParts = Math.max(1, Number(config.pdfMaxAnalysisParts) || 10);
   const renderSide = Math.max(512, Number(config.pdfRenderMaxSide) || Number(config.imageMaxSide) || 1600);
   const renderQuality = Math.max(40, Math.min(100, Number(config.pdfJpegQuality) || Number(config.imageJpegQuality) || 88));
+  const renderFigurePages = config.pdfRenderFigurePages !== false;
+  const figureRenderSide = Math.max(512, Number(config.pdfFigureRenderMaxSide) || 1400);
   const pageOutputDir = path.resolve(config.uploadDir, jobId, '.pdf-pages');
   const imageInputs = [];
   const pdfTextSections = [];
@@ -129,6 +149,7 @@ export async function preparePdfInputs({ files, config, jobId }) {
   let photoBuffer = [];
   let totalPdfPages = 0;
   let renderedPages = 0;
+  let figurePages = 0;
   let textPages = 0;
   let textCharacters = 0;
 
@@ -190,7 +211,8 @@ export async function preparePdfInputs({ files, config, jobId }) {
     }
 
     const fileName = file.originalName || path.basename(absolutePath);
-    const fileStats = { name: fileName, pages: info.pages, textPages: 0, renderedPages: 0 };
+    const embeddedImagePages = renderFigurePages ? await detectEmbeddedImagePages(absolutePath) : new Set();
+    const fileStats = { name: fileName, pages: info.pages, textPages: 0, renderedPages: 0, figurePages: 0 };
     let currentPart = null;
 
     for (let page = 1; page <= info.pages; page += 1) {
@@ -225,6 +247,34 @@ export async function preparePdfInputs({ files, config, jobId }) {
         currentPart.pdfTextSections.push(section);
         textPages += 1;
         fileStats.textPages += 1;
+
+        // Pagine digitali con immagini incorporate o riferimenti a figure:
+        // aggiungiamo una versione raster della pagina per permettere il ritaglio.
+        if (renderFigurePages && (embeddedImagePages.has(page) || figurePageHeuristic(pageText))) {
+          if (imageInputs.length >= maxAiImages) {
+            throw new Error(`Troppe immagini da inviare all'AI (${maxAiImages}). Riduci il numero di pagine PDF o di foto per singola elaborazione.`);
+          }
+          const figureOutputPath = path.join(pageOutputDir, `pdf-${String(sourceFileIndex + 1).padStart(2, '0')}-figure-page-${String(page).padStart(3, '0')}.jpg`);
+          if (!isPathInside(config.uploadDir, figureOutputPath)) throw new Error('Percorso temporaneo figura PDF non valido.');
+          await renderPdfPage({ absolutePath, pageNumber: page, outputPath: figureOutputPath, maxSide: figureRenderSide, jpegQuality: renderQuality });
+          const figureInputIndex = imageInputs.length;
+          const figureInput = {
+            absolutePath: figureOutputPath,
+            relativePath: path.relative(config.uploadDir, figureOutputPath).split(path.sep).join('/'),
+            originalName: `${fileName} — figura pagina ${page}`,
+            mimeType: 'image/jpeg',
+            size: statSync(figureOutputPath).size,
+            inputIndex: figureInputIndex,
+            sourceFileIndex,
+            inputKind: 'pdf-figure-page',
+            displayName: `${fileName} — figura pagina ${page}`,
+            pdfPage: page
+          };
+          imageInputs.push(figureInput);
+          currentPart.imageInputs.push(figureInput);
+          figurePages += 1;
+          fileStats.figurePages += 1;
+        }
         continue;
       }
 
@@ -273,6 +323,7 @@ export async function preparePdfInputs({ files, config, jobId }) {
       pdfCount: pdfFiles.length,
       totalPages: totalPdfPages,
       renderedPages,
+      figurePages,
       textPages,
       recommendedPages,
       pagesPerAnalysis,

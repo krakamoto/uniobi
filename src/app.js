@@ -156,6 +156,8 @@ export function createApp({ config, store, worker }) {
       pdfPagesPerAnalysis: config.pdfPagesPerAnalysis,
       pdfMaxAnalysisParts: config.pdfMaxAnalysisParts,
       pdfTextExtractionEnabled: config.pdfTextExtractionEnabled,
+      pdfRenderFigurePages: config.pdfRenderFigurePages,
+      pdfFigureRenderMaxSide: config.pdfFigureRenderMaxSide,
       webdavEnabled: config.webdavEnabled,
       webdavPath: config.webdavPath,
       cookieSecure: config.cookieSecure,

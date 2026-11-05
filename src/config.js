@@ -49,6 +49,8 @@ export function loadConfig(env = process.env, root = process.cwd()) {
   const pdfTextPageMinChars = Math.max(20, Math.floor(number(env.PDF_TEXT_PAGE_MIN_CHARS, 80)));
   const pdfMaxTextCharsPerJob = Math.max(1000, Math.floor(number(env.PDF_MAX_TEXT_CHARS_PER_JOB, 120000)));
   const pdfRenderMaxSide = Math.max(512, Math.min(4096, number(env.PDF_RENDER_MAX_SIDE, imageMaxSide)));
+  const pdfRenderFigurePages = bool(env.PDF_RENDER_FIGURE_PAGES, true);
+  const pdfFigureRenderMaxSide = Math.max(512, Math.min(4096, number(env.PDF_FIGURE_RENDER_MAX_SIDE, 1400)));
   const maxAiImagesPerJob = Math.max(1, Math.floor(number(env.AI_MAX_IMAGES_PER_JOB, 50)));
   const imageCropEnabled = bool(env.IMAGE_CROP_ENABLED, true);
   const imageCropAnalysisSide = Math.max(256, Math.min(1200, number(env.IMAGE_CROP_ANALYSIS_SIDE, 640)));
@@ -105,6 +107,8 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     pdfTextPageMinChars,
     pdfMaxTextCharsPerJob,
     pdfRenderMaxSide,
+    pdfRenderFigurePages,
+    pdfFigureRenderMaxSide,
     maxAiImagesPerJob,
     imageCropEnabled,
     imageCropAnalysisSide,

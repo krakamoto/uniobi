@@ -1768,7 +1768,7 @@ public class MainActivity extends Activity {
                 int pdfParts = pdfStats.optInt("analysisParts", 0);
                 String pdfLine = "PDF: " + pdfStats.optInt("pdfCount", 0) + " · " + pdfStats.optInt("totalPages", 0)
                     + " pagine" + (pdfParts > 0 ? " · " + pdfParts + " parti" : "")
-                    + " (" + pdfStats.optInt("textPages", 0) + " testo, " + pdfStats.optInt("renderedPages", 0) + " immagini)";
+                    + " (" + pdfStats.optInt("textPages", 0) + " testo, " + pdfStats.optInt("renderedPages", 0) + " immagini, " + pdfStats.optInt("figurePages", 0) + " figure)";
                 content.addView(text(pdfLine, 11, MUTED, Typeface.NORMAL), matchTop(dp(2)));
             }
         }

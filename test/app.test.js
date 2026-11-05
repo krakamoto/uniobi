@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { preparePdfInputs } from '../src/pdf.js';
 import { loadConfig } from '../src/config.js';
 import { createStore } from '../src/db.js';
 import { createWorker } from '../src/worker.js';
@@ -381,6 +382,47 @@ test('PDF multi-pagina viene diviso in parti e completato dal worker', async (t)
   assert.equal(job.result_json.ai.pdf.analysisParts, 3);
   assert.equal(job.result_json.ai.chunking.partCount, 3);
   assert.ok(job.result_json.notes.length >= 1);
+});
+
+test('PDF digitale con figure viene rasterizzato per permettere il ritaglio', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-pdf-figure-'));
+  const uploadDir = path.join(root, 'uploads');
+  mkdirSync(uploadDir, { recursive: true });
+  const psPath = path.join(root, 'figura.ps');
+  const pdfPath = path.join(root, 'figura.pdf');
+  writeFileSync(psPath, '%!PS-Adobe-3.0\n/Helvetica findfont 22 scalefont setfont\n72 720 moveto (Figura 1 - schema di prova con testo) show\nshowpage\n');
+  execFileSync('ps2pdf', [psPath, pdfPath]);
+  try {
+    const result = await preparePdfInputs({
+      files: [{ absolutePath: pdfPath, originalName: 'figura.pdf', mimeType: 'application/pdf' }],
+      config: {
+        uploadDir,
+        pdfMaxPagesPerFile: 5,
+        pdfMaxPagesPerJob: 5,
+        pdfPagesPerAnalysis: 6,
+        pdfMaxAnalysisParts: 5,
+        pdfTextExtractionEnabled: true,
+        pdfTextPageMinChars: 5,
+        pdfMaxTextCharsPerJob: 120000,
+        pdfRenderFigurePages: true,
+        pdfFigureRenderMaxSide: 400,
+        pdfRenderMaxSide: 400,
+        pdfJpegQuality: 60,
+        imageMaxSide: 400,
+        maxAiImagesPerJob: 10
+      },
+      jobId: 'figura-job'
+    });
+    assert.equal(result.stats.totalPages, 1);
+    assert.equal(result.stats.textPages, 1);
+    assert.equal(result.stats.figurePages, 1);
+    assert.equal(result.parts.length, 1);
+    assert.equal(result.parts[0].pdfTextSections.length, 1);
+    assert.equal(result.parts[0].imageInputs.length, 1);
+    assert.equal(result.parts[0].imageInputs[0].inputKind, 'pdf-figure-page');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('scanVault legge titoli e alias dalle note esistenti', () => {
