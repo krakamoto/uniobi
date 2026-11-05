@@ -1,5 +1,12 @@
 # Changelog
 
+## Pulizia wikilink orfani — 2026-11-05
+
+- Aggiunto scanner dei wikilink verso note inesistenti.
+- Aggiunto comando `vault:clean-links` con backup consigliato.
+- Pulizia automatica dopo `DELETE`/`MOVE` WebDAV.
+- Gli allegati immagine restano invariati.
+
 ## Figure dai PDF — 2026-11-05
 
 - Le pagine PDF testuali con immagini o riferimenti a figure vengono rasterizzate.

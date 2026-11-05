@@ -25,6 +25,7 @@ export function loadConfig(env = process.env, root = process.cwd()) {
   }
 
   const webdavEnabled = bool(env.WEBDAV_ENABLED, false);
+  const webdavAutoCleanLinks = bool(env.WEBDAV_AUTO_CLEAN_LINKS, true);
   const webdavPassword = env.WEBDAV_PASSWORD || '';
   const webdavUsername = env.WEBDAV_USERNAME || 'uniai';
   let webdavPath = String(env.WEBDAV_PATH || '/webdav').trim();
@@ -147,6 +148,7 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     allowCreateMissingWikilinks: bool(env.ALLOW_CREATE_MISSING_WIKILINKS, false),
     workerPollMs: number(env.WORKER_POLL_MS, 1500),
     webdavEnabled,
+    webdavAutoCleanLinks,
     webdavUsername,
     webdavPassword,
     webdavPath,

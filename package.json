@@ -11,14 +11,16 @@
     "start": "node --disable-warning=ExperimentalWarning src/server.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
     "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1",
-    "check": "node --check src/server.js && node --check src/app.js && node --check src/webdav.js && node --check src/vault-analysis.js && node --check src/figures.js && node --check src/ai/index.js && node --check src/ai/claude.js && node --check src/image-optimizer.js && node --check src/pdf.js && node --check src/cli/rebuild-vault-artifacts.js && node --check src/cli/ai-usage-summary.js && node --check public/app.js && bash -n scripts/run-server-forever.sh scripts/start-uniai.sh scripts/ensure-uniai.sh scripts/status-uniai.sh scripts/stop-uniai.sh scripts/install-systemd.sh scripts/systemd-helpers.sh",
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/webdav.js && node --check src/vault-analysis.js && node --check src/figures.js && node --check src/ai/index.js && node --check src/ai/claude.js && node --check src/image-optimizer.js && node --check src/pdf.js && node --check src/cli/rebuild-vault-artifacts.js && node --check src/cli/ai-usage-summary.js && node --check src/link-cleaner.js && node --check src/cli/clean-vault-links.js && node --check public/app.js && bash -n scripts/run-server-forever.sh scripts/start-uniai.sh scripts/ensure-uniai.sh scripts/status-uniai.sh scripts/stop-uniai.sh scripts/install-systemd.sh scripts/systemd-helpers.sh",
     "vault:indexes": "node --disable-warning=ExperimentalWarning src/cli/rebuild-vault-artifacts.js",
     "service:start": "./scripts/start-uniai.sh",
     "service:stop": "./scripts/stop-uniai.sh",
     "service:ensure": "./scripts/ensure-uniai.sh",
     "service:status": "./scripts/status-uniai.sh",
     "service:install-systemd": "./scripts/install-systemd.sh",
-    "ai:usage": "node --disable-warning=ExperimentalWarning src/cli/ai-usage-summary.js"
+    "ai:usage": "node --disable-warning=ExperimentalWarning src/cli/ai-usage-summary.js",
+    "vault:clean-links": "node --disable-warning=ExperimentalWarning src/cli/clean-vault-links.js --write --rebuild-indexes",
+    "vault:check-links": "node --disable-warning=ExperimentalWarning src/cli/clean-vault-links.js"
   },
   "dependencies": {
     "express": "^5.1.0",

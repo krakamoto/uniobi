@@ -18,3 +18,5 @@ dist/
 public/downloads/
 
 data/ai-usage.jsonl
+
+data/backups/

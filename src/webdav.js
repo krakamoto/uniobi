@@ -5,8 +5,21 @@ import {
   statSync, writeFileSync, createReadStream, cpSync
 } from 'node:fs';
 import { isPathInside } from './utils.js';
+import { cleanBrokenWikilinks } from './link-cleaner.js';
 
 const DAV_METHODS = 'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, MKCOL, COPY, MOVE';
+
+function cleanLinksAfterVaultMutation(config) {
+  if (!config.webdavAutoCleanLinks) return;
+  try {
+    const result = cleanBrokenWikilinks({ vaultPath: config.vaultPath, dryRun: false });
+    if (result.removedLinks > 0) {
+      console.log(`[webdav] rimossi ${result.removedLinks} wikilink orfani in ${result.changedFiles} note.`);
+    }
+  } catch (error) {
+    console.warn(`[webdav] pulizia wikilink non riuscita: ${error.message}`);
+  }
+}
 
 const MIME_TYPES = {
   '.md': 'text/markdown; charset=utf-8',
@@ -304,7 +317,9 @@ ${parts.join('\n')}
       if (method === 'DELETE') {
         if (!existsSync(target)) return res.status(404).send('Risorsa non trovata.');
         if (target === path.resolve(config.vaultPath)) return res.status(403).send('Non è possibile eliminare la radice del vault.');
+        const deletedStat = statSync(target);
         rmSync(target, { recursive: true, force: true });
+        if (deletedStat.isDirectory() || target.toLowerCase().endsWith('.md')) cleanLinksAfterVaultMutation(config);
         res.status(204).end();
         return undefined;
       }
@@ -322,6 +337,7 @@ ${parts.join('\n')}
         ensureParentDirectory(destination);
         if (method === 'MOVE') renameSync(target, destination);
         else cpSync(target, destination, { recursive: true });
+        if (target.toLowerCase().endsWith('.md') || destination.toLowerCase().endsWith('.md')) cleanLinksAfterVaultMutation(config);
         res.status(201).end();
         return undefined;
       }

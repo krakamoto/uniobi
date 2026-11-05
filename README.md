@@ -341,6 +341,27 @@ Per minimizzare i token:
 
 I token effettivi vengono registrati per ogni job in `data/ai-usage.jsonl` e mostrati nel dettaglio dell’attività.
 
+## Pulizia dei wikilink orfani
+
+Quando una nota viene cancellata da Obsidian, i wikilink nelle altre note possono restare orfani.
+
+Comandi:
+
+```bash
+npm run vault:check-links   # solo controllo
+npm run vault:clean-links   # converte i link orfani in testo e ricostruisce gli indici
+```
+
+I link a immagini e allegati esistenti non vengono toccati.
+
+Con:
+
+```env
+WEBDAV_AUTO_CLEAN_LINKS=true
+```
+
+la pulizia viene eseguita automaticamente anche dopo un `DELETE` o `MOVE` WebDAV di una nota o di una cartella Markdown.
+
 ## Controllo costi AI
 
 Sono attivi limiti anti-costo:
