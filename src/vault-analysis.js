@@ -161,6 +161,21 @@ function noteMetadata(absolutePath, vaultPath) {
   };
 }
 
+
+function canonicalNotes(notes) {
+  const numberedKeys = new Set();
+  for (const note of notes) {
+    if (!/^\d{2,5}\s+/.test(note.basename)) continue;
+    const key = `${note.folder}|${note.basename.replace(/^\d{2,5}\s+/, '').toLocaleLowerCase('it')}`;
+    numberedKeys.add(key);
+  }
+  return notes.filter((note) => {
+    if (/^\d{2,5}\s+/.test(note.basename)) return true;
+    const key = `${note.folder}|${note.basename.toLocaleLowerCase('it')}`;
+    return !numberedKeys.has(key);
+  });
+}
+
 export function detectSubjectPath(relativePath) {
   const segments = String(relativePath || '').split('/').filter(Boolean);
   for (let index = 0; index < segments.length - 1; index += 1) {
@@ -225,7 +240,7 @@ export function matchSubject(course, subjects) {
 
 export function analyzeVaultStructure(vaultPath, { subjectRoots = [] } = {}) {
   const files = walkMarkdown(vaultPath);
-  const notes = files.map((file) => noteMetadata(file, vaultPath));
+  const notes = canonicalNotes(files.map((file) => noteMetadata(file, vaultPath)));
   const groups = new Map();
 
   for (const note of notes) {

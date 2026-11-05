@@ -164,3 +164,25 @@ test('findVaultNote preferisce la versione numerata quando esiste un duplicato s
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+
+test('gli indici non duplicano note ombreggiate da una versione numerata', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-index-canonical-'));
+  try {
+    const subjectDir = path.join(root, 'uni', 'Uni', 'triennale', 'fisica');
+    mkdirSync(subjectDir, { recursive: true });
+    writeFileSync(path.join(subjectDir, '01 Carica.md'), '# Carica\n\nContenuto numerato.\n');
+    writeFileSync(path.join(subjectDir, 'Carica.md'), '# Carica\n\nVecchio duplicato senza numero.\n');
+    const result = rebuildAllVaultArtifacts(root, { subjectRoots: ['uni/Uni/triennale'] });
+    const subject = result.analysis.subjects[0];
+    assert.equal(subject.noteCount, 1);
+    const index = readFileSync(path.join(subjectDir, '_Indice.md'), 'utf8');
+    const caricaLinks = [...index.matchAll(/\[\[([^\]|#]+)/g)]
+      .map((match) => match[1])
+      .filter((target) => /Carica\.md$|Carica$/.test(target));
+    assert.equal(caricaLinks.length, 1);
+    assert.match(caricaLinks[0], /01 Carica$/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

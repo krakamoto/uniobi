@@ -341,6 +341,17 @@ Per minimizzare i token:
 
 I token effettivi vengono registrati per ogni job in `data/ai-usage.jsonl` e mostrati nel dettaglio dell’attività.
 
+## Indici canonici
+
+Quando nel vault esistono sia una nota numerata sia un vecchio duplicato senza numero, gli indici mostrano una sola voce: quella numerata.
+
+La rigenerazione degli indici:
+
+- elimina le voci duplicate;
+- verifica che ogni link dell'indice punti a un file Markdown reale;
+- mantiene una sola voce per nota canonica;
+- rigenera i conteggi delle note.
+
 ## Normalizzazione dei wikilink
 
 I wikilink generati devono usare il nome file completo, incluso il prefisso numerico:

@@ -1,5 +1,11 @@
 # Changelog
 
+## Indici canonici — 2026-11-05
+
+- Gli indici ignorano i duplicati senza numero quando esiste la nota numerata.
+- Eliminate 57 voci duplicate dagli indici.
+- Ogni link degli indici punta a un file Markdown reale.
+
 ## Wikilink numerati tra note — 2026-11-05
 
 - I nuovi link tra note dello stesso caricamento vengono normalizzati dopo l'assegnazione dei numeri.
