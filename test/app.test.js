@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { loadConfig } from '../src/config.js';
 import { createStore } from '../src/db.js';
 import { createWorker } from '../src/worker.js';
@@ -314,6 +315,72 @@ test('upload PDF: estrae il testo e completa il job senza rasterizzare pagine di
   assert.equal(detailPayload.job.result_json.ai.pdf.textPages, 2);
   assert.equal(detailPayload.job.result_json.ai.pdf.renderedPages, 0);
   assert.equal(detailPayload.job.result_json.ai.inputImages.length, 0);
+});
+
+test('PDF multi-pagina viene diviso in parti e completato dal worker', async (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'uniai-pdf-split-'));
+  const uploadDir = path.join(root, 'uploads');
+  const vaultPath = path.join(root, 'vault');
+  const databasePath = path.join(root, 'uniai.db');
+  mkdirSync(uploadDir, { recursive: true });
+  mkdirSync(vaultPath, { recursive: true });
+
+  const pdfInputs = [];
+  for (let i = 0; i < 4; i += 1) {
+    const part = path.join(root, `source-${i}.pdf`);
+    writeFileSync(part, PDF_2_PAGES);
+    pdfInputs.push(part);
+  }
+  const multiPdf = path.join(root, 'appunti-8-pagine.pdf');
+  execFileSync('pdfunite', [...pdfInputs, multiPdf]);
+
+  const config = loadConfig({
+    ...process.env,
+    APP_PASSWORD: '',
+    DATABASE_URL: databasePath,
+    UPLOAD_DIR: uploadDir,
+    OBSIDIAN_VAULT_PATH: vaultPath,
+    AI_PROVIDER: 'mock',
+    AUTO_SAVE_TO_VAULT: 'false',
+    WORKER_POLL_MS: '0',
+    PDF_TEXT_EXTRACTION_ENABLED: 'true',
+    PDF_TEXT_PAGE_MIN_CHARS: '10',
+    PDF_PAGES_PER_ANALYSIS: '3',
+    PDF_MAX_ANALYSIS_PARTS: '10',
+    PDF_MAX_PAGES_PER_JOB: '20',
+    PAPER_MAX_PAGES_PER_FILE: '20'
+  }, root);
+
+  const store = createStore(config.databasePath);
+  const worker = createWorker({ config, store });
+  const app = createApp({ config, store, worker });
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  const { port } = server.address();
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  t.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    await worker.waitForIdle();
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const form = new FormData();
+  form.append('files', new Blob([await import('node:fs/promises').then((fs) => fs.readFile(multiPdf))], { type: 'application/pdf' }), 'appunti-8-pagine.pdf');
+  form.append('course', 'Analisi Matematica II');
+  const uploadResponse = await fetch(`${baseUrl}/api/uploads`, { method: 'POST', body: form });
+  assert.equal(uploadResponse.status, 202);
+  const uploadPayload = await uploadResponse.json();
+  await worker.waitForIdle();
+  const detailResponse = await fetch(`${baseUrl}/api/jobs/${uploadPayload.job.id}`);
+  assert.equal(detailResponse.status, 200);
+  const job = (await detailResponse.json()).job;
+  assert.equal(job.status, 'completed');
+  assert.equal(job.result_json.ai.pdf.totalPages, 8);
+  assert.equal(job.result_json.ai.pdf.analysisParts, 3);
+  assert.equal(job.result_json.ai.chunking.partCount, 3);
+  assert.ok(job.result_json.notes.length >= 1);
 });
 
 test('scanVault legge titoli e alias dalle note esistenti', () => {

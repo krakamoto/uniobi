@@ -1,5 +1,14 @@
 # Changelog
 
+## PDF a blocchi e UI 2.9 — 2026-11-05
+
+- PDF divisi automaticamente in parti da massimo 6 pagine.
+- Analisi AI separata per ogni parte e unione dei risultati.
+- Rimappatura globale delle figure tra le parti.
+- Pulsante PDF separato dall’app Android.
+- Visualizzazione del numero di parti PDF nel dettaglio attività.
+- Limite PDF aggiornato a 60 pagine con massimo 10 parti.
+
 ## Supporto PDF — 2026-11-05
 
 - Upload di PDF oltre a JPG, PNG, WebP, GIF e HEIC/HEIF.

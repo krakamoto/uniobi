@@ -7,6 +7,8 @@ const state = {
   maxFiles: 50,
   maxUploadMb: 20,
   pdfRecommendedPages: 6,
+  pdfPagesPerAnalysis: 6,
+  pdfMaxAnalysisParts: 10,
   authenticated: false
 };
 
@@ -133,8 +135,10 @@ async function loadHealth() {
     if (Number.isInteger(health.maxFilesPerUpload) && health.maxFilesPerUpload > 0) state.maxFiles = health.maxFilesPerUpload;
     if (Number.isFinite(Number(health.maxUploadMb)) && Number(health.maxUploadMb) > 0) state.maxUploadMb = Number(health.maxUploadMb);
     if (Number.isFinite(Number(health.pdfRecommendedPagesPerJob)) && Number(health.pdfRecommendedPagesPerJob) > 0) state.pdfRecommendedPages = Number(health.pdfRecommendedPagesPerJob);
+    if (Number.isFinite(Number(health.pdfPagesPerAnalysis)) && Number(health.pdfPagesPerAnalysis) > 0) state.pdfPagesPerAnalysis = Number(health.pdfPagesPerAnalysis);
+    if (Number.isFinite(Number(health.pdfMaxAnalysisParts)) && Number(health.pdfMaxAnalysisParts) > 0) state.pdfMaxAnalysisParts = Number(health.pdfMaxAnalysisParts);
     const uploadLimitHint = $('#upload-limit-hint');
-    if (uploadLimitHint) uploadLimitHint.textContent = `Puoi caricare più pagine insieme. Max ${state.maxFiles} file, ${state.maxUploadMb} MB ciascuno. PDF: consigliate ${state.pdfRecommendedPages} pagine scansionate per volta.`;
+    if (uploadLimitHint) uploadLimitHint.textContent = `Puoi caricare più pagine insieme. Max ${state.maxFiles} file, ${state.maxUploadMb} MB ciascuno. I PDF vengono divisi automaticamente in parti da ${state.pdfPagesPerAnalysis} pagine, con un massimo di ${state.pdfMaxAnalysisParts} parti.`;
     $('#provider-badge').textContent = health.aiProvider === 'mock' ? 'Demo · provider mock' : `AI · ${health.aiProvider}`;
     if (!health.vaultWritable) {
       $('#provider-badge').textContent += ' · vault non scrivibile';
@@ -242,7 +246,7 @@ function renderDialog(job) {
     ? `<br><strong>Immagini:</strong> ${imageProcessing.length} · ritagliate ${croppedCount}`
     : '';
   const pdfStatsHtml = pdfStats
-    ? `<br><strong>PDF:</strong> ${pdfStats.pdfCount} · ${pdfStats.totalPages} pagine (${pdfStats.textPages} testo, ${pdfStats.renderedPages} immagini)`
+    ? `<br><strong>PDF:</strong> ${pdfStats.pdfCount} · ${pdfStats.totalPages} pagine · ${pdfStats.analysisParts || 0} parti (${pdfStats.textPages} testo, ${pdfStats.renderedPages} immagini)`
     : '';
   const title = result.title || job.requested_title || job.course || 'Appunti';
   $('#dialog-title').textContent = title;

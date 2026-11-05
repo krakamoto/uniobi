@@ -200,9 +200,11 @@ Tutte le variabili sono documentate in `.env.example`:
 | `PDF_TEXT_EXTRACTION_ENABLED` | `true` | Estrae il testo dai PDF digitali per risparmiare token |
 | `PDF_TEXT_PAGE_MIN_CHARS` | `80` | Sotto questa soglia una pagina PDF viene rasterizzata |
 | `PDF_MAX_TEXT_CHARS_PER_JOB` | `120000` | Tetto del testo PDF estratto per job |
-| `PDF_MAX_PAGES_PER_FILE` | `30` | Limite pagine per singolo PDF |
-| `PDF_MAX_PAGES_PER_JOB` | `24` | Limite pagine PDF totali per elaborazione |
-| `PDF_RECOMMENDED_PAGES_PER_JOB` | `6` | Numero consigliato di pagine scansionate per elaborazione |
+| `PDF_MAX_PAGES_PER_FILE` | `60` | Limite pagine per singolo PDF |
+| `PDF_MAX_PAGES_PER_JOB` | `60` | Limite pagine PDF totali per elaborazione |
+| `PDF_RECOMMENDED_PAGES_PER_JOB` | `6` | Numero consigliato di pagine per parte |
+| `PDF_PAGES_PER_ANALYSIS` | `6` | Pagine PDF massime per singola chiamata AI |
+| `PDF_MAX_ANALYSIS_PARTS` | `10` | Numero massimo di parti AI per PDF |
 | `PDF_RENDER_MAX_SIDE` | `1600` | Lato massimo delle pagine PDF rasterizzate |
 | `AI_MAX_IMAGES_PER_JOB` | `50` | Tetto immagini visive (foto + pagine PDF rasterizzate) |
 | `OBSIDIAN_VAULT_PATH` | `./obsidian-vault` | Percorso del vault Obsidian |
@@ -303,7 +305,7 @@ Il fallback Sonnet resta attivo per:
 
 ## PDF e consumo token
 
-Il server tratta i PDF in modo ibrido:
+Il server tratta i PDF in modo ibrido e li divide automaticamente in parti da massimo 6 pagine:
 
 1. prova a estrarre il testo con `pdftotext`;
 2. se una pagina contiene testo sufficiente, la invia al modello come testo (molto meno costoso di un’immagine);
@@ -316,9 +318,11 @@ Configurazione consigliata:
 PDF_TEXT_EXTRACTION_ENABLED=true
 PDF_TEXT_PAGE_MIN_CHARS=80
 PDF_MAX_TEXT_CHARS_PER_JOB=120000
-PDF_MAX_PAGES_PER_FILE=30
-PDF_MAX_PAGES_PER_JOB=24
+PDF_MAX_PAGES_PER_FILE=60
+PDF_MAX_PAGES_PER_JOB=60
 PDF_RECOMMENDED_PAGES_PER_JOB=6
+PDF_PAGES_PER_ANALYSIS=6
+PDF_MAX_ANALYSIS_PARTS=10
 PDF_RENDER_MAX_SIDE=1600
 AI_MAX_IMAGES_PER_JOB=50
 ```
@@ -328,7 +332,7 @@ Per minimizzare i token:
 - **PDF digitale con testo selezionabile:** 8–12 pagine per caricamento sono ragionevoli; il costo dominante diventa il testo, non le immagini.
 - **PDF scansionato o fatto di foto:** meglio **4–6 pagine per caricamento**. Ogni pagina visiva consuma tipicamente qualche migliaio di token e gruppi troppo grandi aumentano anche il rischio di output troncato e fallback costosi.
 - Per lezioni molto lunghe conviene creare più attività e poi unire/collegare le note in Obsidian.
-- Il limite massimo predefinito è 24 pagine PDF per job, ma è un tetto di sicurezza: non è il valore consigliato.
+- Il limite massimo predefinito è 60 pagine PDF per job, ma le pagine vengono analizzate in parti separate da massimo 6.
 
 I token effettivi vengono registrati per ogni job in `data/ai-usage.jsonl` e mostrati nel dettaglio dell’attività.
 
@@ -993,7 +997,6 @@ uniai/
 - OCR locale con Tesseract come fallback quando il provider non è disponibile.
 - Ricerca semantica delle note con embeddings per wikilink più precisi.
 - Modifica visuale dei metadati e delle immagini prima dell’analisi.
-- Supporto PDF multipagina e conversione automatica in immagini.
 - Coda persistente (BullMQ/Redis) per più worker.
 - Autenticazione multiutente e isolamento dei vault per utente.
 - Watcher del vault per aggiornare l’indice dei wikilink in tempo reale.

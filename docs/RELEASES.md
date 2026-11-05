@@ -15,6 +15,7 @@ Le release intermedie e i relativi tag vengono eliminati per evitare duplicati e
 | Tag | Ruolo | Contenuto |
 | --- | --- | --- |
 | `v2.8-android` | Ultima stabile | APK, AAB e ZIP con supporto PDF e upload fino a 50 file |
+| `v2.9-android` | Ultima stabile | APK, AAB e ZIP con UI PDF e analisi PDF a blocchi |
 | `v2.1-android` | Milestone Android 17 | Fix critico `ACCESS_LOCAL_NETWORK` per server LAN |
 | `v1.0-android` | Prima release storica | Primo pacchetto Android distribuibile |
 

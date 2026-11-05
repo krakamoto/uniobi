@@ -153,6 +153,8 @@ export function createApp({ config, store, worker }) {
       pdfMaxPagesPerFile: config.pdfMaxPagesPerFile,
       pdfMaxPagesPerJob: config.pdfMaxPagesPerJob,
       pdfRecommendedPagesPerJob: config.pdfRecommendedPagesPerJob,
+      pdfPagesPerAnalysis: config.pdfPagesPerAnalysis,
+      pdfMaxAnalysisParts: config.pdfMaxAnalysisParts,
       pdfTextExtractionEnabled: config.pdfTextExtractionEnabled,
       webdavEnabled: config.webdavEnabled,
       webdavPath: config.webdavPath,

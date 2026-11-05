@@ -110,12 +110,14 @@ export async function validatePdfUploads(files, config) {
 }
 
 export async function preparePdfInputs({ files, config, jobId }) {
-  const maxPerFile = Math.max(1, Number(config.pdfMaxPagesPerFile) || 30);
-  const maxPerJob = Math.max(1, Number(config.pdfMaxPagesPerJob) || 24);
+  const maxPerFile = Math.max(1, Number(config.pdfMaxPagesPerFile) || 60);
+  const maxPerJob = Math.max(1, Number(config.pdfMaxPagesPerJob) || 60);
   const maxAiImages = Math.max(1, Number(config.maxAiImagesPerJob) || 50);
   const minTextChars = Math.max(20, Number(config.pdfTextPageMinChars) || 80);
   const maxTextChars = Math.max(1000, Number(config.pdfMaxTextCharsPerJob) || 120000);
   const recommendedPages = Math.max(1, Number(config.pdfRecommendedPagesPerJob) || 6);
+  const pagesPerAnalysis = Math.max(1, Number(config.pdfPagesPerAnalysis) || recommendedPages);
+  const maxAnalysisParts = Math.max(1, Number(config.pdfMaxAnalysisParts) || 10);
   const renderSide = Math.max(512, Number(config.pdfRenderMaxSide) || Number(config.imageMaxSide) || 1600);
   const renderQuality = Math.max(40, Math.min(100, Number(config.pdfJpegQuality) || Number(config.imageJpegQuality) || 88));
   const pageOutputDir = path.resolve(config.uploadDir, jobId, '.pdf-pages');
@@ -123,26 +125,51 @@ export async function preparePdfInputs({ files, config, jobId }) {
   const pdfTextSections = [];
   const warnings = [];
   const pdfFiles = [];
+  const parts = [];
+  let photoBuffer = [];
   let totalPdfPages = 0;
   let renderedPages = 0;
   let textPages = 0;
   let textCharacters = 0;
 
+  function pushPart(part) {
+    if (!part.imageInputs.length && !part.pdfTextSections.length) return;
+    part.index = parts.length;
+    if (part.kind === 'pdf') {
+      part.label = `${part.fileName} · pagine ${part.pageStart}–${part.pageEnd}`;
+    } else {
+      part.label = `Foto (${part.imageInputs.length})`;
+    }
+    parts.push(part);
+    if (parts.length > maxAnalysisParts) {
+      throw new Error(`Il PDF richiede ${parts.length} parti di analisi, oltre il limite di ${maxAnalysisParts}. Riduci il numero di pagine o dividi il PDF.`);
+    }
+  }
+
+  function flushPhotos() {
+    if (!photoBuffer.length) return;
+    pushPart({ kind: 'images', imageInputs: photoBuffer, pdfTextSections: [] });
+    photoBuffer = [];
+  }
+
   for (let sourceFileIndex = 0; sourceFileIndex < files.length; sourceFileIndex += 1) {
     const file = files[sourceFileIndex];
     if (!isPdfFile(file)) {
       const inputIndex = imageInputs.length;
-      imageInputs.push({
+      const input = {
         ...file,
         inputIndex,
         sourceFileIndex,
         inputKind: 'image',
         displayName: file.originalName || path.basename(file.absolutePath),
         pdfPage: null
-      });
+      };
+      imageInputs.push(input);
+      photoBuffer.push(input);
       continue;
     }
 
+    flushPhotos();
     const absolutePath = file.absolutePath || file.path;
     const info = await inspectPdf(absolutePath);
     if (info.pages > maxPerFile) {
@@ -162,8 +189,24 @@ export async function preparePdfInputs({ files, config, jobId }) {
       }
     }
 
-    const fileStats = { name: file.originalName || path.basename(absolutePath), pages: info.pages, textPages: 0, renderedPages: 0 };
+    const fileName = file.originalName || path.basename(absolutePath);
+    const fileStats = { name: fileName, pages: info.pages, textPages: 0, renderedPages: 0 };
+    let currentPart = null;
+
     for (let page = 1; page <= info.pages; page += 1) {
+      if (!currentPart || (page - 1) % pagesPerAnalysis === 0) {
+        if (currentPart) pushPart(currentPart);
+        currentPart = {
+          kind: 'pdf',
+          fileName,
+          pageStart: page,
+          pageEnd: page,
+          imageInputs: [],
+          pdfTextSections: []
+        };
+      }
+      currentPart.pageEnd = page;
+
       const rawText = String(textPagesRaw[page - 1] || '').trim();
       if (meaningfulTextLength(rawText) >= minTextChars) {
         const pageText = rawText.slice(0, 30000);
@@ -171,12 +214,15 @@ export async function preparePdfInputs({ files, config, jobId }) {
         if (textCharacters > maxTextChars) {
           throw new Error(`Il testo estratto dai PDF supera il limite di ${maxTextChars} caratteri per elaborazione. Suddividi il PDF in più attività.`);
         }
-        pdfTextSections.push({
-          fileName: file.originalName || path.basename(absolutePath),
+        const section = {
+          sourceFileIndex,
+          fileName,
           pageNumber: page,
           pageCount: info.pages,
           text: pageText
-        });
+        };
+        pdfTextSections.push(section);
+        currentPart.pdfTextSections.push(section);
         textPages += 1;
         fileStats.textPages += 1;
         continue;
@@ -189,34 +235,39 @@ export async function preparePdfInputs({ files, config, jobId }) {
       if (!isPathInside(config.uploadDir, outputPath)) throw new Error('Percorso temporaneo PDF non valido.');
       await renderPdfPage({ absolutePath, pageNumber: page, outputPath, maxSide: renderSide, jpegQuality: renderQuality });
       const inputIndex = imageInputs.length;
-      imageInputs.push({
+      const input = {
         absolutePath: outputPath,
         relativePath: path.relative(config.uploadDir, outputPath).split(path.sep).join('/'),
-        originalName: `${file.originalName || path.basename(absolutePath)} — pagina ${page}`,
+        originalName: `${fileName} — pagina ${page}`,
         mimeType: 'image/jpeg',
         size: statSync(outputPath).size,
         inputIndex,
         sourceFileIndex,
         inputKind: 'pdf-page',
-        displayName: `${file.originalName || path.basename(absolutePath)} — pagina ${page}`,
+        displayName: `${fileName} — pagina ${page}`,
         pdfPage: page
-      });
+      };
+      imageInputs.push(input);
+      currentPart.imageInputs.push(input);
       renderedPages += 1;
       fileStats.renderedPages += 1;
     }
+    if (currentPart) pushPart(currentPart);
     pdfFiles.push(fileStats);
   }
 
+  flushPhotos();
   if (imageInputs.length > maxAiImages) {
     throw new Error(`Troppe immagini da inviare all'AI (${maxAiImages}). Riduci il numero di file o di pagine PDF.`);
   }
   if (totalPdfPages > recommendedPages) {
-    warnings.push(`PDF: ${totalPdfPages} pagine in una sola elaborazione. Per ridurre i token e migliorare l'affidabilità si consigliano ${recommendedPages} pagine per volta.`);
+    warnings.push(`PDF: ${totalPdfPages} pagine divise automaticamente in ${parts.length} parti da massimo ${pagesPerAnalysis} pagine.`);
   }
 
   return {
     imageInputs,
     pdfTextSections,
+    parts,
     warnings,
     stats: {
       pdfCount: pdfFiles.length,
@@ -224,6 +275,17 @@ export async function preparePdfInputs({ files, config, jobId }) {
       renderedPages,
       textPages,
       recommendedPages,
+      pagesPerAnalysis,
+      analysisParts: parts.length,
+      parts: parts.map((part) => ({
+        index: part.index,
+        label: part.label,
+        kind: part.kind,
+        pageStart: part.pageStart ?? null,
+        pageEnd: part.pageEnd ?? null,
+        imageCount: part.imageInputs.length,
+        textPageCount: part.pdfTextSections.length
+      })),
       files: pdfFiles
     }
   };

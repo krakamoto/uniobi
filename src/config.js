@@ -41,9 +41,11 @@ export function loadConfig(env = process.env, root = process.cwd()) {
   }
   const imageMaxSide = Math.max(512, number(env.IMAGE_MAX_SIDE, 1600));
   const imageJpegQuality = Math.max(40, Math.min(100, number(env.IMAGE_JPEG_QUALITY, 88)));
-  const pdfMaxPagesPerFile = Math.max(1, Math.floor(number(env.PDF_MAX_PAGES_PER_FILE, 30)));
-  const pdfMaxPagesPerJob = Math.max(1, Math.floor(number(env.PDF_MAX_PAGES_PER_JOB, 24)));
+  const pdfMaxPagesPerFile = Math.max(1, Math.floor(number(env.PDF_MAX_PAGES_PER_FILE, 60)));
+  const pdfMaxPagesPerJob = Math.max(1, Math.floor(number(env.PDF_MAX_PAGES_PER_JOB, 60)));
   const pdfRecommendedPagesPerJob = Math.max(1, Math.floor(number(env.PDF_RECOMMENDED_PAGES_PER_JOB, 6)));
+  const pdfPagesPerAnalysis = Math.max(1, Math.floor(number(env.PDF_PAGES_PER_ANALYSIS, pdfRecommendedPagesPerJob)));
+  const pdfMaxAnalysisParts = Math.max(1, Math.floor(number(env.PDF_MAX_ANALYSIS_PARTS, 10)));
   const pdfTextPageMinChars = Math.max(20, Math.floor(number(env.PDF_TEXT_PAGE_MIN_CHARS, 80)));
   const pdfMaxTextCharsPerJob = Math.max(1000, Math.floor(number(env.PDF_MAX_TEXT_CHARS_PER_JOB, 120000)));
   const pdfRenderMaxSide = Math.max(512, Math.min(4096, number(env.PDF_RENDER_MAX_SIDE, imageMaxSide)));
@@ -97,6 +99,8 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     pdfMaxPagesPerFile,
     pdfMaxPagesPerJob,
     pdfRecommendedPagesPerJob,
+    pdfPagesPerAnalysis,
+    pdfMaxAnalysisParts,
     pdfTextExtractionEnabled: bool(env.PDF_TEXT_EXTRACTION_ENABLED, true),
     pdfTextPageMinChars,
     pdfMaxTextCharsPerJob,

@@ -65,6 +65,7 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PICK_IMAGES = 4001;
+    private static final int REQUEST_PICK_PDF = 4002;
     private static final int MAX_SELECTED_IMAGES = 50;
     private static final int REQUEST_CAMERA = 4002;
     private static final int REQUEST_NETWORK_PERMISSIONS = 4003;
@@ -481,14 +482,17 @@ public class MainActivity extends Activity {
     private View uploadCard() {
         LinearLayout card = card();
         card.addView(text("Nuova lezione", 20, TEXT, Typeface.BOLD));
-        card.addView(text("Seleziona più foto dalla galleria o scatta con la fotocamera. Le foto vengono salvate localmente e caricate automaticamente appena il server è raggiungibile.", 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
+        card.addView(text("Seleziona foto o PDF. Le foto vengono ottimizzate localmente; i PDF vengono divisi automaticamente in parti per ridurre token e tempi.", 12, MUTED, Typeface.NORMAL), matchTop(dp(4)));
 
         LinearLayout sourceButtons = new LinearLayout(this);
         sourceButtons.setOrientation(LinearLayout.HORIZONTAL);
         sourceButtons.setPadding(0, dp(12), 0, 0);
-        Button gallery = secondaryButton("Galleria");
+        Button gallery = secondaryButton("Foto");
         gallery.setOnClickListener(view -> pickImages());
         sourceButtons.addView(gallery, weighted());
+        Button pdf = secondaryButton("PDF");
+        pdf.setOnClickListener(view -> pickPdf());
+        sourceButtons.addView(pdf, weightedWithStart(dp(8)));
         Button camera = secondaryButton("Scatta foto");
         camera.setOnClickListener(view -> takePhoto());
         sourceButtons.addView(camera, weightedWithStart(dp(8)));
@@ -576,7 +580,7 @@ public class MainActivity extends Activity {
         actionRow.addView(uploadProgress, new LinearLayout.LayoutParams(dp(34), dp(34)));
         card.addView(actionRow, matchTop(dp(16)));
 
-        uploadStatus = text("Foto e PDF vengono salvati sul telefono e caricati automaticamente quando il server è raggiungibile.", 12, MUTED, Typeface.NORMAL);
+        uploadStatus = text("Foto e PDF vengono salvati nella coda locale. I PDF vengono divisi automaticamente in parti prima dell'analisi AI.", 12, MUTED, Typeface.NORMAL);
         card.addView(uploadStatus, matchTop(dp(6)));
         return card;
     }
@@ -1445,6 +1449,18 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void pickPdf() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/pdf");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        try {
+            startActivityForResult(intent, REQUEST_PICK_PDF);
+        } catch (ActivityNotFoundException error) {
+            toast("Nessuna app per scegliere PDF disponibile.");
+        }
+    }
+
     private void takePhoto() {
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         try {
@@ -1478,7 +1494,7 @@ public class MainActivity extends Activity {
             creatingCameraFile = false;
             return;
         }
-        if (requestCode == REQUEST_PICK_IMAGES && resultCode == RESULT_OK && data != null) {
+        if ((requestCode == REQUEST_PICK_IMAGES || requestCode == REQUEST_PICK_PDF) && resultCode == RESULT_OK && data != null) {
             List<Uri> picked = new ArrayList<>();
             if (data.getClipData() != null) {
                 for (int i = 0; i < data.getClipData().getItemCount(); i++) {
@@ -1745,8 +1761,11 @@ public class MainActivity extends Activity {
             }
             JSONObject pdfStats = aiInfo.optJSONObject("pdf");
             if (pdfStats != null && pdfStats.optInt("pdfCount", 0) > 0) {
-                content.addView(text("PDF: " + pdfStats.optInt("pdfCount", 0) + " · " + pdfStats.optInt("totalPages", 0)
-                    + " pagine (" + pdfStats.optInt("textPages", 0) + " testo, " + pdfStats.optInt("renderedPages", 0) + " immagini)", 11, MUTED, Typeface.NORMAL), matchTop(dp(2)));
+                int pdfParts = pdfStats.optInt("analysisParts", 0);
+                String pdfLine = "PDF: " + pdfStats.optInt("pdfCount", 0) + " · " + pdfStats.optInt("totalPages", 0)
+                    + " pagine" + (pdfParts > 0 ? " · " + pdfParts + " parti" : "")
+                    + " (" + pdfStats.optInt("textPages", 0) + " testo, " + pdfStats.optInt("renderedPages", 0) + " immagini)";
+                content.addView(text(pdfLine, 11, MUTED, Typeface.NORMAL), matchTop(dp(2)));
             }
         }
 

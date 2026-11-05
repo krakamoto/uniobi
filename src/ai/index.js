@@ -471,8 +471,8 @@ ATTENZIONE: questa richiesta contiene UNA SOLA immagine (indice originale ${inde
   }
 }
 
-export async function analyzeImages({ config, files, aiFiles, pdfTextSections = [], metadata, vaultNotes, vaultAnalysis, matchedSubject }) {
-  const budget = { calls: 0, max: Math.max(1, Number(config.aiMaxProviderCallsPerJob) || 10) };
+export async function analyzeImages({ config, files, aiFiles, pdfTextSections = [], metadata, vaultNotes, vaultAnalysis, matchedSubject, budget: sharedBudget }) {
+  const budget = sharedBudget || { calls: 0, max: Math.max(1, Number(config.aiMaxProviderCallsPerJob) || 12) };
   const imageFiles = Array.isArray(aiFiles) ? aiFiles : files;
   const images = await Promise.all(imageFiles.map((file) => serializeImage(file, config)));
   const existingTitles = vaultNotes
