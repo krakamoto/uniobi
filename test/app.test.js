@@ -9,7 +9,7 @@ import { createWorker } from '../src/worker.js';
 import { createApp } from '../src/app.js';
 import { selectWikilinks, scanVault } from '../src/vault.js';
 import { geminiAnalyze } from '../src/ai/gemini.js';
-import { analyzeImages } from '../src/ai/index.js';
+import { analyzeImages, shouldUseAdvancedFallback } from '../src/ai/index.js';
 import { sanitizeFilename, isPathInside } from '../src/utils.js';
 import { buildFinalMarkdown, validateLatexDelimiters } from '../src/markdown.js';
 
@@ -347,6 +347,34 @@ test('il LaTeX non delimitato viene segnalato e correttamente formattato', () =>
   assert.match(markdown, /LaTeX non racchiuso/);
 });
 
+
+test('le parti illeggibili non attivano fallback se disabilitato', () => {
+  const base = {
+    notes: [{
+      title: 'Appunti parziali',
+      markdown: '# Appunti parziali\n\n> [!warning] Parte illeggibile\n> La seconda riga non è comprensibile.',
+      extractedText: 'Testo parziale',
+      confidence: 0.2,
+      warnings: ['Parte illeggibile nella foto manoscritta']
+    }],
+    warnings: ['Parte illeggibile nella foto manoscritta'],
+    confidence: 0.2,
+    analyzedImageIndexes: [0, 1]
+  };
+  const config = {
+    aiProvider: 'claude',
+    aiFallbackEnabled: true,
+    aiFallbackModel: 'claude-sonnet-5-5',
+    aiFallbackOnIllegible: false,
+    aiFallbackMinConfidence: 0.7,
+    aiFallbackMinCharsPerImage: 80
+  };
+  const noFallback = shouldUseAdvancedFallback(base, [{}, {}], config);
+  assert.equal(noFallback.needed, false);
+  const missingCoverage = shouldUseAdvancedFallback({ ...base, analyzedImageIndexes: [0] }, [{}, {}], config);
+  assert.equal(missingCoverage.needed, true);
+  assert.match(missingCoverage.reason, /immagini non analizzate/i);
+});
 
 test('fallback automatico Gemini Flash → Gemini Pro su bassa confidenza', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'uniai-ai-fallback-'));

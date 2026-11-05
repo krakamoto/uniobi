@@ -1,5 +1,13 @@
 # Changelog
 
+## Revisione manuale delle parti illeggibili — 2026-11-05
+
+- `AI_FALLBACK_ON_ILLEGIBLE=false` come default.
+- Warning inline `[!warning] Parte illeggibile` richiesto al modello.
+- Warning specifici con indice immagine.
+- Il fallback Sonnet non viene più attivato da bassa confidenza o trascrizione breve quando il problema è solo l’illeggibilità.
+- La copertura immagini e gli errori strutturali continuano ad attivare il fallback.
+
 ## Controllo costi AI — 2026-11-05
 
 - Limite al fallback foto-per-foto: massimo 6 immagini.

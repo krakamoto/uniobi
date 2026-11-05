@@ -104,7 +104,7 @@ export function loadConfig(env = process.env, root = process.cwd()) {
     aiFallbackApiKey: env.AI_FALLBACK_API_KEY || env.AI_API_KEY || '',
     aiFallbackBaseUrl: env.AI_FALLBACK_BASE_URL || env.AI_BASE_URL || '',
     aiFallbackMinConfidence: number(env.AI_FALLBACK_MIN_CONFIDENCE, 0.7),
-    aiFallbackOnIllegible: bool(env.AI_FALLBACK_ON_ILLEGIBLE, true),
+    aiFallbackOnIllegible: bool(env.AI_FALLBACK_ON_ILLEGIBLE, false),
     aiFallbackMinCharsPerImage: number(env.AI_FALLBACK_MIN_CHARS_PER_IMAGE, 80),
     aiEmergencyEnabled,
     aiEmergencyProvider: (env.AI_EMERGENCY_PROVIDER || 'deepseek').toLowerCase(),

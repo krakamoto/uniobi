@@ -261,6 +261,37 @@ Tutte le variabili sono documentate in `.env.example`:
 | `PROPFIND/GET/PUT/...` | `/webdav/*` | Sincronizzazione WebDAV del vault Obsidian |
 | `POST` | `/api/vault/rebuild-artifacts` | Rigenera indici e mappe di tutte le materie |
 
+## Parti illeggibili e revisione manuale
+
+Con:
+
+```env
+AI_FALLBACK_ON_ILLEGIBLE=false
+```
+
+le parti scritte a mano non leggibili non attivano Sonnet. Il modello deve:
+
+- inserire `[illeggibile]` nel punto esatto;
+- creare un callout `> [!warning] Parte illeggibile`;
+- aggiungere un warning con il numero dell'immagine;
+- compilare comunque la nota con tutto il contenuto leggibile.
+
+La nota finale include automaticamente una sezione:
+
+```markdown
+> [!warning] Da verificare
+> - ...
+```
+
+In questo modo la correzione viene fatta manualmente in Obsidian senza fallback AI aggiuntivi.
+
+Il fallback Sonnet resta attivo per:
+
+- immagini non analizzate;
+- note vuote o senza Markdown;
+- JSON non valido;
+- errori del provider.
+
 ## Controllo costi AI
 
 Sono attivi limiti anti-costo:

@@ -385,15 +385,17 @@ export function shouldUseAdvancedFallback(result, files, config) {
   const missingIndexes = missingImageIndexes(result, files.map((_, index) => index));
   if (missingIndexes.length) reasons.push(`immagini non analizzate: ${missingIndexes.map((index) => index + 1).join(', ')}`);
 
-  if (markdownLength < 120) reasons.push('Markdown troppo corto o incompleto');
-  if (confidence < config.aiFallbackMinConfidence) {
+  const hasIllegibleWarning = /(illeggibil|non leggibil|poco leggibil|incert|dubbio|bassa qualit)/.test(warnings);
+  const manualReviewOnly = hasIllegibleWarning && !config.aiFallbackOnIllegible;
+  if (markdownLength < 120 && !manualReviewOnly) reasons.push('Markdown troppo corto o incompleto');
+  if (confidence < config.aiFallbackMinConfidence && !manualReviewOnly) {
     reasons.push(`confidenza ${confidence.toFixed(2)} < soglia ${config.aiFallbackMinConfidence}`);
   }
-  if (config.aiFallbackOnIllegible && /(illeggibil|non leggibil|poco leggibil|incert|dubbio|bassa qualit)/.test(warnings)) {
+  if (config.aiFallbackOnIllegible && hasIllegibleWarning) {
     reasons.push('sono state segnalate parti illeggibili o incerte');
   }
   const minChars = Math.max(1, files.length) * config.aiFallbackMinCharsPerImage;
-  if (extractedText.length < minChars) {
+  if (extractedText.length < minChars && !manualReviewOnly) {
     reasons.push(`trascrizione troppo breve (${extractedText.length}/${minChars} caratteri)`);
   }
 
@@ -496,7 +498,10 @@ ${existingTitles.length ? existingTitles.map((title) => `- ${title}`).join('\n')
 
 Regole precise basate sul vault reale:
 1. Trascrivi fedelmente il contenuto; non inventare informazioni.
-2. Correggi solo refusi evidenti. Segnala le parti illeggibili con "[illeggibile]" e inseriscile in warnings.
+2. Correggi solo refusi evidenti. Per ogni parte scritta a mano non leggibile inserisci nel punto esatto un callout Obsidian:
+   > [!warning] Parte illeggibile
+   > Breve descrizione di ciò che manca o non è comprensibile.
+   Usa anche il marcatore [illeggibile] nel testo e inserisci un warning specifico con il numero dell'immagine. Non inventare il contenuto mancante.
 3. Produci Markdown Obsidian valido: H1, sezioni H2/H3, elenchi, callout Obsidian per avvisi e incertezze.
 3b. Ogni simbolo, variabile o espressione matematica deve essere racchiusa tra $...$ se inline o $$...$$ se display. Non scrivere MAI comandi LaTeX nudi come \frac, \vec, \alpha, \sum: devono sempre trovarsi dentro i delimitatori $ o $$.
 4. Usa un titolo descrittivo in italiano, senza data e senza prefisso numerico. Deve descrivere il concetto, non la lezione in generale.
